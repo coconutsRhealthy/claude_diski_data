@@ -7,7 +7,12 @@ from discount_finder.pipeline import run
 
 # Market used when no --market flag is passed (e.g. when hitting Run in
 # IntelliJ without parameters). Change this to switch between runs.
-MARKET = "germany"
+MARKET = "belgium"
+
+# Trigger the Apify Instagram scraper actor by default. Set to False to
+# instead read from a local dataset_*.json (or APIFY_DATASET_ID_<MARKET>).
+# CLI override: --no-apify-run to skip, --apify-run to force.
+APIFY_RUN = True
 
 
 def main() -> None:
@@ -36,8 +41,9 @@ def main() -> None:
     )
     parser.add_argument(
         "--apify-run",
-        action="store_true",
-        help="Trigger the Instagram scraper actor for this market using inputs/<market>/influencers.txt and process the resulting dataset.",
+        action=argparse.BooleanOptionalAction,
+        default=APIFY_RUN,
+        help=f"Trigger the Instagram scraper actor for this market using inputs/<market>/influencers.txt. Defaults to APIFY_RUN in main.py ({APIFY_RUN!r}); pass --no-apify-run to skip.",
     )
     parser.add_argument("--output", type=Path, help="Override the full-output JSON path.")
     parser.add_argument("--max-age-days", type=int, default=config.MAX_AGE_DAYS)
