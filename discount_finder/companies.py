@@ -228,7 +228,29 @@ def _cli(argv: list[str]) -> int:
     if args.cmd == "rename":
         reg.rename(args.canonical_id, args.display_name)
         reg.save()
-        print(f"Renamed {args.canonical_id} → {args.display_name}")
+        # Propagate the new display name to existing entries in every
+        # market's codes registry, then regenerate each public feed.
+        from .registry import CodesRegistry, regenerate_public_feed
+
+        feed_summaries: list[str] = []
+        for market in config.MARKETS:
+            codes_path = config.codes_registry_path(market)
+            if not codes_path.exists():
+                continue
+            codes = CodesRegistry(path=codes_path)
+            updated = 0
+            for entry in codes._entries.values():
+                if entry.get("canonical_company_id") == args.canonical_id:
+                    entry["company"] = args.display_name
+                    updated += 1
+            if updated:
+                codes.save()
+            feed_size = regenerate_public_feed(market)
+            feed_summaries.append(f"{market}: {feed_size} entries (+{updated} renamed)")
+        feeds_str = "; ".join(feed_summaries) if feed_summaries else "no markets initialized"
+        print(
+            f"Renamed {args.canonical_id} → {args.display_name!r}. Feeds: {feeds_str}."
+        )
         return 0
     if args.cmd == "add-alias":
         reg.add_alias(args.canonical_id, args.alias)
