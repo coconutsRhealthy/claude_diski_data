@@ -1,0 +1,24 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Pipeline artifacts
+output/
+*.log
+
+# Large Apify dataset exports
+dataset_*.json
+
+# macOS
+.DS_Store
