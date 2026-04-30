@@ -45,7 +45,6 @@ def main() -> None:
         default=APIFY_RUN,
         help=f"Trigger the Instagram scraper actor for this market using inputs/<market>/influencers.txt. Defaults to APIFY_RUN in main.py ({APIFY_RUN!r}); pass --no-apify-run to skip.",
     )
-    parser.add_argument("--output", type=Path, help="Override the full-output JSON path.")
     parser.add_argument("--max-age-days", type=int, default=config.MAX_AGE_DAYS)
     parser.add_argument("--batch-size", type=int, default=config.BATCH_SIZE)
     parser.add_argument("--dry-run", action="store_true", help="Skip the Claude API calls; print counts only.")
@@ -56,7 +55,6 @@ def main() -> None:
         input_path=args.input,
         apify_dataset_id=args.apify_dataset,
         apify_run=args.apify_run,
-        output_path=args.output,
         max_age_days=args.max_age_days,
         batch_size=args.batch_size,
         dry_run=args.dry_run,

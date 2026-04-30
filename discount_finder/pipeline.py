@@ -60,7 +60,6 @@ def run(
     input_path: Path | None = None,
     apify_dataset_id: str | None = None,
     apify_run: bool = False,
-    output_path: Path | None = None,
     max_age_days: int = config.MAX_AGE_DAYS,
     batch_size: int = config.BATCH_SIZE,
     dry_run: bool = False,
@@ -70,7 +69,6 @@ def run(
             f"Unknown market {market!r}. Configured markets: {config.MARKETS}."
         )
 
-    output_path = output_path or config.output_path(market)
     public_path = config.public_output_path(market)
     codes_path = config.codes_registry_path(market)
 
@@ -206,10 +204,28 @@ def run(
     fresh_count = sum(1 for e in enriched if e["is_fresh"])
     suppressed_count = len(enriched) - fresh_count
 
-    output = {
+    # Public feed: cumulative view derived from the registry, sorted by
+    # last_published_at desc (newest publications on top).
+    public = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "discount_codes": [
+            public_entry(e) for e in codes_registry.all_published_sorted()
+        ],
+    }
+    public_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(public_path, "w") as f:
+        json.dump(public, f, indent=2, default=str, ensure_ascii=False)
+
+    print(
+        f"\nProcessed {len(enriched)} extracted code(s): "
+        f"{fresh_count} new/resurfaced, {suppressed_count} recent duplicates."
+    )
+    print(f"Wrote public feed to {public_path} ({len(public['discount_codes'])} codes)")
+
+    # Returned for programmatic callers; never written to disk.
+    return {
+        "generated_at": public["generated_at"],
         "source": source,
-        "max_age_days": max_age_days,
         "stats": {
             "posts_scanned": total,
             "posts_recent": after_recency,
@@ -220,26 +236,3 @@ def run(
         },
         "discount_codes": enriched,
     }
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w") as f:
-        json.dump(output, f, indent=2, default=str, ensure_ascii=False)
-
-    # Public feed: cumulative view derived from the registry, sorted by
-    # last_published_at desc (newest publications on top).
-    public = {
-        "generated_at": output["generated_at"],
-        "discount_codes": [
-            public_entry(e) for e in codes_registry.all_published_sorted()
-        ],
-    }
-    public_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(public_path, "w") as f:
-        json.dump(public, f, indent=2, default=str, ensure_ascii=False)
-
-    print(
-        f"\nWrote {len(enriched)} discount codes to {output_path} "
-        f"({fresh_count} new/resurfaced, {suppressed_count} recent duplicates)"
-    )
-    print(f"Wrote public feed to {public_path} ({len(public['discount_codes'])} codes)")
-    return output

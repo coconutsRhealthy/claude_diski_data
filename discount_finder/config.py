@@ -41,10 +41,6 @@ def codes_registry_path(market: str) -> Path:
     return ROOT / "data" / market / "codes.json"
 
 
-def output_path(market: str) -> Path:
-    return ROOT / "output" / market / "discount_codes.json"
-
-
 def public_output_path(market: str) -> Path:
     return ROOT / "output" / market / "discount_codes_public.json"
 
