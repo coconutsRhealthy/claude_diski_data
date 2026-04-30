@@ -7,7 +7,7 @@ from discount_finder.pipeline import run
 
 # Market used when no --market flag is passed (e.g. when hitting Run in
 # IntelliJ without parameters). Change this to switch between runs.
-MARKET = "belgium"
+MARKET = "germany"
 
 # Trigger the Apify Instagram scraper actor by default. Set to False to
 # instead read from a local dataset_*.json (or APIFY_DATASET_ID_<MARKET>).

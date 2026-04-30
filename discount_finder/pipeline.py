@@ -157,15 +157,18 @@ def run(
             item = batch[idx]
             post = item["post"]
             for code in r.get("discount_codes", []):
+                raw_code = (code.get("code") or "").strip()
+                if not raw_code:
+                    continue  # empty/whitespace code — useless to consumers
                 raw_company = code["company"].strip()
                 if _is_placeholder_company(raw_company):
                     continue
-                if _is_likely_referral_token(code.get("code", "")):
+                if _is_likely_referral_token(raw_code):
                     continue
                 canonical_id, display_name = registry.resolve(raw_company)
                 discount_codes.append(
                     {
-                        "code": code["code"].strip(),
+                        "code": raw_code,
                         "canonical_company_id": canonical_id,
                         "company": display_name,
                         "company_raw": raw_company,

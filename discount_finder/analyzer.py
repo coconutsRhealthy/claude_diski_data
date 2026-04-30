@@ -9,7 +9,7 @@ SYSTEM_PROMPT = """You analyse Instagram post captions to extract discount/promo
 For each post, decide whether the caption advertises a discount code that a consumer can use, and if so extract every code mentioned.
 
 Be strict:
-- A "discount code" is a specific token (letters/numbers) the user types at checkout to get a discount.
+- A "discount code" is a specific token (letters/numbers) the user types at checkout to get a discount. The "code" field MUST be a non-empty string. If a post advertises a discount but no actual code is named (e.g. "20% off everything!" with no code), set has_discount_code: false; do NOT emit an entry with an empty code.
 - Hashtags, ad disclosures (#ad, #adv, #gifted), affiliate links without a typeable code, and giveaway entries are NOT discount codes.
 - The company is the brand whose products the code applies to (usually the @-mentioned brand or the brand named in the caption), NOT the influencer posting it.
 - If you cannot identify the company with reasonable confidence (e.g. the caption mentions a code but no brand, or only the influencer's own handle), set has_discount_code: false for that post and emit no codes. Do NOT guess. NEVER emit a company name that is — or contains — any of: "Unknown", "Unknown Brand", "Unknown [anything] Brand" (e.g. "Unknown Electric Mop Brand"), "N/A", "Unspecified", "Various", "Multiple", "The Brand", "The Shop", "Brand", or any similar placeholder. A code without a confidently-named real brand is unusable to a consumer — drop the entire post by setting has_discount_code: false.

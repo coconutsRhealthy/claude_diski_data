@@ -31,6 +31,12 @@ _REGION_SUFFIXES = {
     "us", "usa", "eu", "uk", "gb", "fr", "de", "nl", "be", "it", "es",
     "au", "ca", "jp", "br", "mx", "world", "global", "international",
     "intl", "official", "store", "shop", "hq", "co", "inc",
+    # Native-language country names — caption / handle authors don't always
+    # use ISO codes ("Halara Deutschland", "Brand Österreich").
+    "deutschland", "germany", "österreich", "osterreich", "austria",
+    "schweiz", "switzerland", "nederland", "netherlands", "belgique",
+    "belgië", "belgie", "belgium", "france", "italia", "italy", "españa",
+    "espana", "spain", "portugal",
     # TLD-ish suffixes: after "." → " " replacement, "shein.com" becomes
     # "shein com" so dropping "com" here collapses bare/.com forms.
     "com", "net", "org", "io", "app",
