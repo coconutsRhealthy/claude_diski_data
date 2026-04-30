@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import config, loader
+from .companies import CompanyRegistry
 from .prescan import is_likely_discount_post
 
 
@@ -64,6 +65,7 @@ def run(
     from .analyzer import analyze_batch
 
     client = anthropic.Anthropic()
+    registry = CompanyRegistry()
     discount_codes = []
     for batch_num, batch in enumerate(_chunks(candidates, batch_size), start=1):
         print(f"  batch {batch_num} ({len(batch)} posts)…", flush=True)
@@ -82,10 +84,14 @@ def run(
             item = batch[idx]
             post = item["post"]
             for code in r.get("discount_codes", []):
+                raw_company = code["company"].strip()
+                canonical_id, display_name = registry.resolve(raw_company)
                 discount_codes.append(
                     {
                         "code": code["code"].strip(),
-                        "company": code["company"].strip(),
+                        "canonical_company_id": canonical_id,
+                        "company": display_name,
+                        "company_raw": raw_company,
                         "discount_description": code["discount_description"].strip(),
                         "percentage": code.get("percentage"),
                         "post_url": post.get("url"),
@@ -96,10 +102,12 @@ def run(
                     }
                 )
 
-    # 5. Deduplicate by (code, company) — keep newest post.
+    registry.save()
+
+    # 5. Deduplicate by (code, canonical_company_id) — keep newest post.
     deduped: dict[tuple[str, str], dict] = {}
     for entry in discount_codes:
-        key = (entry["code"].upper(), entry["company"].lower())
+        key = (entry["code"].upper(), entry["canonical_company_id"])
         existing = deduped.get(key)
         if not existing or (entry["post_timestamp"] or "") > (existing["post_timestamp"] or ""):
             deduped[key] = entry
