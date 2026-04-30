@@ -5,10 +5,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterator
 
-import requests
 
-
-def _iter_posts(profiles: list[dict]) -> Iterator[dict]:
+def iter_posts(profiles: list[dict]) -> Iterator[dict]:
     """Flatten Apify profile records into individual posts with profile context."""
     for profile in profiles:
         profile_ctx = {
@@ -26,15 +24,16 @@ def _iter_posts(profiles: list[dict]) -> Iterator[dict]:
 def load_from_file(path: Path) -> list[dict]:
     with open(path) as f:
         data = json.load(f)
-    return list(_iter_posts(data))
+    return list(iter_posts(data))
 
 
 def load_from_apify(dataset_id: str, token: str) -> list[dict]:
-    """Fetch the latest items from an Apify dataset."""
-    url = f"https://api.apify.com/v2/datasets/{dataset_id}/items"
-    resp = requests.get(url, params={"token": token, "clean": "true"}, timeout=120)
-    resp.raise_for_status()
-    return list(_iter_posts(resp.json()))
+    """Fetch all items from an existing Apify dataset and flatten into posts."""
+    from apify_client import ApifyClient
+
+    client = ApifyClient(token)
+    items = list(client.dataset(dataset_id).iterate_items())
+    return list(iter_posts(items))
 
 
 def filter_recent(items: list[dict], max_age_days: int) -> list[dict]:

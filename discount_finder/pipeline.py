@@ -41,6 +41,7 @@ def run(
     market: str,
     input_path: Path | None = None,
     apify_dataset_id: str | None = None,
+    apify_run: bool = False,
     output_path: Path | None = None,
     max_age_days: int = config.MAX_AGE_DAYS,
     batch_size: int = config.BATCH_SIZE,
@@ -55,27 +56,39 @@ def run(
     public_path = config.public_output_path(market)
     codes_path = config.codes_registry_path(market)
 
-    # 1. Load — resolve the input source for this market.
-    if apify_dataset_id is None and input_path is None:
+    # 1. Resolve the input source for this market.
+    if apify_run:
+        from .apify_runner import run_actor_for_market
+
+        items, dataset_id = run_actor_for_market(market)
+        source = f"apify-run:{dataset_id}"
+    elif apify_dataset_id:
+        token = os.environ.get("APIFY_TOKEN") or os.environ.get("APIFY_KEY")
+        if not token:
+            raise RuntimeError("APIFY_TOKEN not set in environment (.env).")
+        items = loader.load_from_apify(apify_dataset_id, token)
+        source = f"apify:{apify_dataset_id}"
+    elif input_path:
+        items = loader.load_from_file(input_path)
+        source = str(input_path)
+    else:
         env_dataset = os.environ.get(config.apify_dataset_env(market))
         if env_dataset:
-            apify_dataset_id = env_dataset
+            token = os.environ.get("APIFY_TOKEN") or os.environ.get("APIFY_KEY")
+            if not token:
+                raise RuntimeError("APIFY_TOKEN not set in environment (.env).")
+            items = loader.load_from_apify(env_dataset, token)
+            source = f"apify:{env_dataset}"
         else:
             input_path = config.default_input_for(market)
             if input_path is None:
                 raise RuntimeError(
                     f"No input source for market {market!r}. Provide --input, "
-                    f"--apify-dataset, set ${config.apify_dataset_env(market)}, or "
-                    f"drop a dataset_*.json file in inputs/{market}/."
+                    f"--apify-dataset, --apify-run, set ${config.apify_dataset_env(market)}, "
+                    f"or drop a dataset_*.json file in inputs/{market}/."
                 )
-
-    if apify_dataset_id:
-        token = os.environ["APIFY_API_TOKEN"]
-        items = loader.load_from_apify(apify_dataset_id, token)
-        source = f"apify:{apify_dataset_id}"
-    else:
-        items = loader.load_from_file(input_path)
-        source = str(input_path)
+            items = loader.load_from_file(input_path)
+            source = str(input_path)
 
     total = len(items)
 

@@ -29,6 +29,11 @@ def main() -> None:
         "--apify-dataset",
         help="Apify dataset id to fetch instead of a local file. Defaults to env var APIFY_DATASET_ID_<MARKET>.",
     )
+    parser.add_argument(
+        "--apify-run",
+        action="store_true",
+        help="Trigger the Instagram scraper actor for this market using inputs/<market>/influencers.txt and process the resulting dataset.",
+    )
     parser.add_argument("--output", type=Path, help="Override the full-output JSON path.")
     parser.add_argument("--max-age-days", type=int, default=config.MAX_AGE_DAYS)
     parser.add_argument("--batch-size", type=int, default=config.BATCH_SIZE)
@@ -39,6 +44,7 @@ def main() -> None:
         market=args.market,
         input_path=args.input,
         apify_dataset_id=args.apify_dataset,
+        apify_run=args.apify_run,
         output_path=args.output,
         max_age_days=args.max_age_days,
         batch_size=args.batch_size,
