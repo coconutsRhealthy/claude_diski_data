@@ -36,7 +36,7 @@ def public_entry(entry: dict) -> dict:
 
 
 class CodesRegistry:
-    def __init__(self, path: Path = config.CODES_REGISTRY_PATH):
+    def __init__(self, path: Path):
         self.path = path
         self._entries: dict[str, dict] = {}
         self._load()
@@ -165,13 +165,15 @@ class CodesRegistry:
         return moved
 
 
-def regenerate_public_feed(public_path: Path = config.PUBLIC_OUTPUT_PATH) -> int:
-    """Rewrite the public feed from the current codes registry.
+def regenerate_public_feed(market: str) -> int:
+    """Rewrite the public feed for ``market`` from its codes registry.
 
     Used after manual maintenance (merges, prunes) so the frontend reflects
     the change without waiting for the next full pipeline run.
     """
-    registry = CodesRegistry()
+    codes_path = config.codes_registry_path(market)
+    public_path = config.public_output_path(market)
+    registry = CodesRegistry(path=codes_path)
     public = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "discount_codes": [public_entry(e) for e in registry.all_published_sorted()],

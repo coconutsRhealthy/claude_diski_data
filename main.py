@@ -14,15 +14,29 @@ def main() -> None:
         pass
 
     parser = argparse.ArgumentParser(description="Extract discount codes from Instagram posts.")
-    parser.add_argument("--input", type=Path, help="Local Apify export JSON file.")
-    parser.add_argument("--apify-dataset", help="Apify dataset id to fetch instead of a local file.")
-    parser.add_argument("--output", type=Path, default=config.OUTPUT_PATH)
+    parser.add_argument(
+        "--market",
+        required=True,
+        choices=config.MARKETS,
+        help="Which market to process. Drives input lookup and output paths.",
+    )
+    parser.add_argument(
+        "--input",
+        type=Path,
+        help="Local Apify export JSON file. Defaults to the most recent dataset_*.json in inputs/<market>/.",
+    )
+    parser.add_argument(
+        "--apify-dataset",
+        help="Apify dataset id to fetch instead of a local file. Defaults to env var APIFY_DATASET_ID_<MARKET>.",
+    )
+    parser.add_argument("--output", type=Path, help="Override the full-output JSON path.")
     parser.add_argument("--max-age-days", type=int, default=config.MAX_AGE_DAYS)
     parser.add_argument("--batch-size", type=int, default=config.BATCH_SIZE)
     parser.add_argument("--dry-run", action="store_true", help="Skip the Claude API calls; print counts only.")
     args = parser.parse_args()
 
     run(
+        market=args.market,
         input_path=args.input,
         apify_dataset_id=args.apify_dataset,
         output_path=args.output,

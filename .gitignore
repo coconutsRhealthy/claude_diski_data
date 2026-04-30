@@ -24,5 +24,8 @@ data/
 # Large Apify dataset exports
 dataset_*.json
 
+# Per-market input folders (Apify exports live here, big binary blobs)
+inputs/
+
 # macOS
 .DS_Store

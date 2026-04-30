@@ -38,6 +38,7 @@ def _chunks(items: list, size: int):
 
 
 def run(
+    market: str,
     input_path: Path | None = None,
     apify_dataset_id: str | None = None,
     output_path: Path | None = None,
@@ -45,17 +46,36 @@ def run(
     batch_size: int = config.BATCH_SIZE,
     dry_run: bool = False,
 ) -> dict:
-    output_path = output_path or config.OUTPUT_PATH
+    if market not in config.MARKETS:
+        raise ValueError(
+            f"Unknown market {market!r}. Configured markets: {config.MARKETS}."
+        )
 
-    # 1. Load
+    output_path = output_path or config.output_path(market)
+    public_path = config.public_output_path(market)
+    codes_path = config.codes_registry_path(market)
+
+    # 1. Load — resolve the input source for this market.
+    if apify_dataset_id is None and input_path is None:
+        env_dataset = os.environ.get(config.apify_dataset_env(market))
+        if env_dataset:
+            apify_dataset_id = env_dataset
+        else:
+            input_path = config.default_input_for(market)
+            if input_path is None:
+                raise RuntimeError(
+                    f"No input source for market {market!r}. Provide --input, "
+                    f"--apify-dataset, set ${config.apify_dataset_env(market)}, or "
+                    f"drop a dataset_*.json file in inputs/{market}/."
+                )
+
     if apify_dataset_id:
         token = os.environ["APIFY_API_TOKEN"]
         items = loader.load_from_apify(apify_dataset_id, token)
         source = f"apify:{apify_dataset_id}"
     else:
-        path = input_path or config.DEFAULT_INPUT_PATH
-        items = loader.load_from_file(path)
-        source = str(path)
+        items = loader.load_from_file(input_path)
+        source = str(input_path)
 
     total = len(items)
 
@@ -142,7 +162,7 @@ def run(
     #    publication is within PUBLIC_DEDUP_WINDOW_DAYS are flagged
     #    is_fresh=False and kept off the public feed.
     today = datetime.now(timezone.utc).date()
-    codes_registry = CodesRegistry()
+    codes_registry = CodesRegistry(path=codes_path)
     enriched = codes_registry.classify_and_update(
         final, today, config.PUBLIC_DEDUP_WINDOW_DAYS
     )
@@ -177,7 +197,6 @@ def run(
             public_entry(e) for e in codes_registry.all_published_sorted()
         ],
     }
-    public_path = config.PUBLIC_OUTPUT_PATH
     public_path.parent.mkdir(parents=True, exist_ok=True)
     with open(public_path, "w") as f:
         json.dump(public, f, indent=2, default=str, ensure_ascii=False)

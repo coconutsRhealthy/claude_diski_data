@@ -23,7 +23,7 @@ from pathlib import Path
 
 from . import config
 
-REGISTRY_PATH = config.ROOT / "data" / "companies.json"
+REGISTRY_PATH = config.COMPANIES_REGISTRY_PATH
 
 # Trailing tokens dropped during normalization — regional locales and generic
 # qualifiers that don't change brand identity.
@@ -202,18 +202,27 @@ def _cli(argv: list[str]) -> int:
     if args.cmd == "merge":
         reg.merge(args.from_id, args.into_id)
         reg.save()
-        # Migrate any codes registered under the old canonical so the
-        # codes registry and public feed stay in sync.
+        # Companies are shared across markets, so apply the migration to
+        # every market's codes registry and regenerate every public feed.
         from .registry import CodesRegistry, regenerate_public_feed
 
         new_display_name = reg._entries[args.into_id]["display_name"]
-        codes = CodesRegistry()
-        moved = codes.migrate_canonical(args.from_id, args.into_id, new_display_name)
-        codes.save()
-        feed_size = regenerate_public_feed()
+        total_moved = 0
+        feed_summaries: list[str] = []
+        for market in config.MARKETS:
+            codes_path = config.codes_registry_path(market)
+            if not codes_path.exists():
+                continue  # market hasn't been run yet
+            codes = CodesRegistry(path=codes_path)
+            moved = codes.migrate_canonical(args.from_id, args.into_id, new_display_name)
+            codes.save()
+            feed_size = regenerate_public_feed(market)
+            total_moved += moved
+            feed_summaries.append(f"{market}: {feed_size} entries (+{moved} migrated)")
+        feeds_str = "; ".join(feed_summaries) if feed_summaries else "no markets initialized"
         print(
             f"Merged company {args.from_id} → {args.into_id}; "
-            f"migrated {moved} code(s); public feed now {feed_size} entries."
+            f"migrated {total_moved} code(s) total. Feeds: {feeds_str}."
         )
         return 0
     if args.cmd == "rename":

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -18,20 +20,51 @@ BATCH_SIZE = 10
 # context lives in the first ~1500 chars; trimming saves input tokens.
 CAPTION_MAX_CHARS = 1500
 
-# Full pipeline output (everything we know about each code).
-OUTPUT_PATH = ROOT / "output" / "discount_codes.json"
+# Markets the pipeline knows about. Add a country here and you can
+# immediately run `python main.py --market <name>`. Folder layout per market:
+#   inputs/<market>/dataset_*.json      Apify exports (gitignored)
+#   data/<market>/codes.json            persistent codes registry
+#   output/<market>/discount_codes*.json full + public outputs
+MARKETS: list[str] = ["germany", "belgium"]
 
-# Trimmed file the frontend consumes — derived from OUTPUT_PATH.
-PUBLIC_OUTPUT_PATH = ROOT / "output" / "discount_codes_public.json"
-
-# Persistent master registry of every code ever extracted, with first/last-seen
-# timestamps. Drives post-LLM dedup against the public feed.
-CODES_REGISTRY_PATH = ROOT / "data" / "codes.json"
+# Shared across all markets — brand identity is universal, so Shein in
+# Germany and Shein in Belgium share one canonical id.
+COMPANIES_REGISTRY_PATH = ROOT / "data" / "companies.json"
 
 # A code re-extracted within this many days of its last publication is treated
 # as a recent duplicate and kept off the public feed (its position on the feed
 # stays unchanged). After the window it can resurface and jump back to the top.
 PUBLIC_DEDUP_WINDOW_DAYS = 20
 
-# Default local input file (export from Apify Instagram scraper).
-DEFAULT_INPUT_PATH = ROOT / "dataset_instagram-scraper_2026-04-29_03-34-34-770.json"
+
+def codes_registry_path(market: str) -> Path:
+    return ROOT / "data" / market / "codes.json"
+
+
+def output_path(market: str) -> Path:
+    return ROOT / "output" / market / "discount_codes.json"
+
+
+def public_output_path(market: str) -> Path:
+    return ROOT / "output" / market / "discount_codes_public.json"
+
+
+def apify_dataset_env(market: str) -> str:
+    """Env var name where the Apify dataset id for ``market`` is read from."""
+    return f"APIFY_DATASET_ID_{market.upper()}"
+
+
+def default_input_for(market: str) -> Path | None:
+    """Latest ``dataset_*.json`` in ``inputs/<market>/``, if any.
+
+    Used when neither ``--input`` nor ``--apify-dataset`` is supplied.
+    """
+    folder = ROOT / "inputs" / market
+    if not folder.exists():
+        return None
+    candidates = sorted(
+        folder.glob("dataset_*.json"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    return candidates[0] if candidates else None
