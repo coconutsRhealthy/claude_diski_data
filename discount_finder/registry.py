@@ -17,9 +17,20 @@ from pathlib import Path
 from . import config
 
 
+# Generic words the LLM occasionally returns as a "value" instead of a real
+# discount amount ("Coupon" for SHEIN B8QTA, etc.). They mean "I don't know" —
+# render as null on the frontend.
+_PLACEHOLDER_VALUES = {
+    "coupon", "discount", "promo", "code", "deal",
+    "sale", "offer", "voucher", "savings",
+}
+
+
 def public_entry(entry: dict) -> dict:
     """Trim a registry/run entry to the four fields the frontend consumes."""
     raw_value = (entry.get("value") or "").strip()
+    if raw_value.lower() in _PLACEHOLDER_VALUES:
+        raw_value = ""
     discount = raw_value or None
 
     date_str = entry.get("last_published_at")

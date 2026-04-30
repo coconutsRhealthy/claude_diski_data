@@ -32,6 +32,24 @@ def _is_placeholder_company(raw: str) -> bool:
     return s in _PLACEHOLDER_COMPANY_EXACT
 
 
+def _is_likely_referral_token(code: str) -> bool:
+    """Drop Shein-style account-tied referral tokens that aren't real promo codes.
+
+    Conservative: only flags long mixed-case alphanumerics that look like
+    embedded-username referral links (e.g. "RF4raniivdb047",
+    "USQS4lisajkoster479"). The shorter 5-char tokens like "B8QTA" are
+    indistinguishable from legitimate codes by shape alone — those rely
+    on the prompt rule to be filtered.
+    """
+    s = (code or "").strip()
+    if len(s) <= 12:
+        return False
+    has_upper = any(c.isupper() for c in s)
+    has_lower = any(c.islower() for c in s)
+    has_digit = any(c.isdigit() for c in s)
+    return has_upper and has_lower and has_digit
+
+
 def _chunks(items: list, size: int):
     for i in range(0, len(items), size):
         yield items[i : i + size]
@@ -141,6 +159,8 @@ def run(
             for code in r.get("discount_codes", []):
                 raw_company = code["company"].strip()
                 if _is_placeholder_company(raw_company):
+                    continue
+                if _is_likely_referral_token(code.get("code", "")):
                     continue
                 canonical_id, display_name = registry.resolve(raw_company)
                 discount_codes.append(
