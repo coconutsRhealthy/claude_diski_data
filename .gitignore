@@ -17,6 +17,10 @@ venv/
 output/
 *.log
 
+# Persistent state (grows over time, machine-specific). Back up separately —
+# data/codes.json is irrecoverable from source.
+data/
+
 # Large Apify dataset exports
 dataset_*.json
 

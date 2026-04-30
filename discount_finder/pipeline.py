@@ -8,6 +8,7 @@ from pathlib import Path
 from . import config, loader
 from .companies import CompanyRegistry
 from .prescan import is_likely_discount_post
+from .registry import CodesRegistry
 
 
 def _chunks(items: list, size: int):
@@ -105,7 +106,7 @@ def run(
 
     registry.save()
 
-    # 5. Deduplicate by (code, canonical_company_id) — keep newest post.
+    # 5. Deduplicate by (code, canonical_company_id) within this run — keep newest post.
     deduped: dict[tuple[str, str], dict] = {}
     for entry in discount_codes:
         key = (entry["code"].upper(), entry["canonical_company_id"])
@@ -113,6 +114,18 @@ def run(
         if not existing or (entry["post_timestamp"] or "") > (existing["post_timestamp"] or ""):
             deduped[key] = entry
     final = sorted(deduped.values(), key=lambda x: x["post_timestamp"] or "", reverse=True)
+
+    # 6. Reconcile with the persistent codes registry. Codes whose last
+    #    publication is within PUBLIC_DEDUP_WINDOW_DAYS are flagged
+    #    is_fresh=False and kept off the public feed.
+    today = datetime.now(timezone.utc).date()
+    codes_registry = CodesRegistry()
+    enriched = codes_registry.classify_and_update(
+        final, today, config.PUBLIC_DEDUP_WINDOW_DAYS
+    )
+    codes_registry.save()
+    fresh_count = sum(1 for e in enriched if e["is_fresh"])
+    suppressed_count = len(enriched) - fresh_count
 
     output = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -122,27 +135,35 @@ def run(
             "posts_scanned": total,
             "posts_recent": after_recency,
             "posts_after_prescan": after_prescan,
-            "codes_found": len(final),
+            "codes_found": len(enriched),
+            "codes_fresh": fresh_count,
+            "codes_suppressed": suppressed_count,
         },
-        "discount_codes": final,
+        "discount_codes": enriched,
     }
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
         json.dump(output, f, indent=2, default=str, ensure_ascii=False)
 
-    # Trimmed feed for the frontend — the full file stays as the source of truth.
+    # Public feed: cumulative view derived from the registry, sorted by
+    # last_published_at desc (newest publications on top).
     public = {
         "generated_at": output["generated_at"],
-        "discount_codes": [_public_entry(e) for e in final],
+        "discount_codes": [
+            _public_entry(e) for e in codes_registry.all_published_sorted()
+        ],
     }
     public_path = config.PUBLIC_OUTPUT_PATH
     public_path.parent.mkdir(parents=True, exist_ok=True)
     with open(public_path, "w") as f:
         json.dump(public, f, indent=2, default=str, ensure_ascii=False)
 
-    print(f"\nWrote {len(final)} discount codes to {output_path}")
-    print(f"Wrote public feed to {public_path}")
+    print(
+        f"\nWrote {len(enriched)} discount codes to {output_path} "
+        f"({fresh_count} new/resurfaced, {suppressed_count} recent duplicates)"
+    )
+    print(f"Wrote public feed to {public_path} ({len(public['discount_codes'])} codes)")
     return output
 
 
@@ -155,12 +176,17 @@ def _public_entry(entry: dict) -> dict:
         pct = entry.get("percentage")
         value = f"{pct}%" if isinstance(pct, int) else (entry.get("discount_description") or "")
 
-    ts = entry.get("post_timestamp") or ""
-    date = ts[:10] if len(ts) >= 10 else ts  # ISO timestamp → "YYYY-MM-DD"
+    # Prefer last_published_at (the day the code went on the feed) so the
+    # "date" matches the feed's sort order. Fall back to post_timestamp for
+    # older entries written before the registry existed.
+    date_str = entry.get("last_published_at")
+    if not date_str:
+        ts = entry.get("post_timestamp") or ""
+        date_str = ts[:10] if len(ts) >= 10 else ts
 
     return {
         "company": entry["company"],
         "code": entry["code"],
         "discount": value,
-        "date": date,
+        "date": date_str,
     }

@@ -23,5 +23,14 @@ OUTPUT_PATH = ROOT / "output" / "discount_codes.json"
 # Trimmed file the frontend consumes — derived from OUTPUT_PATH.
 PUBLIC_OUTPUT_PATH = ROOT / "output" / "discount_codes_public.json"
 
+# Persistent master registry of every code ever extracted, with first/last-seen
+# timestamps. Drives post-LLM dedup against the public feed.
+CODES_REGISTRY_PATH = ROOT / "data" / "codes.json"
+
+# A code re-extracted within this many days of its last publication is treated
+# as a recent duplicate and kept off the public feed (its position on the feed
+# stays unchanged). After the window it can resurface and jump back to the top.
+PUBLIC_DEDUP_WINDOW_DAYS = 20
+
 # Default local input file (export from Apify Instagram scraper).
 DEFAULT_INPUT_PATH = ROOT / "dataset_instagram-scraper_2026-04-29_03-34-34-770.json"
