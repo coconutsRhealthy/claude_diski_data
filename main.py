@@ -5,6 +5,11 @@ from discount_finder import config
 from discount_finder.pipeline import run
 
 
+# Market used when no --market flag is passed (e.g. when hitting Run in
+# IntelliJ without parameters). Change this to switch between runs.
+MARKET = "germany"
+
+
 def main() -> None:
     try:
         from dotenv import load_dotenv
@@ -16,9 +21,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Extract discount codes from Instagram posts.")
     parser.add_argument(
         "--market",
-        required=True,
+        default=MARKET,
         choices=config.MARKETS,
-        help="Which market to process. Drives input lookup and output paths.",
+        help=f"Which market to process. Defaults to MARKET in main.py ({MARKET!r}).",
     )
     parser.add_argument(
         "--input",
