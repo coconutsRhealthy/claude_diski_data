@@ -169,12 +169,11 @@ def run(
 
 def _public_entry(entry: dict) -> dict:
     """Trim a full entry to the four fields the frontend consumes."""
-    # Prefer the LLM's short `value`; fall back to a percentage or the long
-    # description so older entries written before `value` existed still render.
-    value = entry.get("value") or ""
-    if not value:
-        pct = entry.get("percentage")
-        value = f"{pct}%" if isinstance(pct, int) else (entry.get("discount_description") or "")
+    # Use the LLM's short `value`. When no concrete discount was stated in the
+    # caption, `value` is empty — emit null so the frontend can render the
+    # entry without a discount badge instead of a vague placeholder.
+    raw_value = (entry.get("value") or "").strip()
+    discount = raw_value or None
 
     # Prefer last_published_at (the day the code went on the feed) so the
     # "date" matches the feed's sort order. Fall back to post_timestamp for
@@ -187,6 +186,6 @@ def _public_entry(entry: dict) -> dict:
     return {
         "company": entry["company"],
         "code": entry["code"],
-        "discount": value,
+        "discount": discount,
         "date": date_str,
     }

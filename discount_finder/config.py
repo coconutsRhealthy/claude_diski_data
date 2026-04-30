@@ -2,9 +2,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# Claude model. claude-opus-4-7 is the default; for high-volume extraction
-# claude-haiku-4-5 is a strong cost/perf trade-off ($1/$5 per 1M tokens vs $5/$25).
-MODEL = "claude-opus-4-7"
+# Claude model. Haiku 4.5 handles structured extraction reliably at a fraction
+# of Opus pricing ($1/$5 per 1M tokens vs $5/$25); switch back to claude-opus-4-7
+# for spot-checks or if Haiku misses too many multilingual edge cases.
+MODEL = "claude-haiku-4-5"
 
 # Only consider posts newer than this many days.
 MAX_AGE_DAYS = 3

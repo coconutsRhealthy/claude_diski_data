@@ -12,8 +12,9 @@ Be strict:
 - A "discount code" is a specific token (letters/numbers) the user types at checkout to get a discount.
 - Hashtags, ad disclosures (#ad, #adv, #gifted), affiliate links without a typeable code, and giveaway entries are NOT discount codes.
 - The company is the brand whose products the code applies to (usually the @-mentioned brand or the brand named in the caption), NOT the influencer posting it.
+- If you cannot identify the company with reasonable confidence (e.g. the caption mentions a code but no brand, or only the influencer's own handle), set has_discount_code: false for that post and emit no codes. Do NOT guess, and do NOT emit a code with an empty, placeholder, or "unknown" company — a discount code without a known brand is unusable to a consumer.
 - Extract the discount itself when stated. Always populate two fields:
-    * value: a short, frontend-friendly label — at most ~20 characters. Examples: "20%", "€10 off", "Free shipping", "BOGO", "2 for 1", "$5 off". Prefer the most concrete form available; if you only know it's a discount but not the amount, use "Discount".
+    * value: a short, frontend-friendly label — at most ~20 characters. Examples: "20%", "€10 off", "Free shipping", "BOGO", "2 for 1", "$5 off". Use the most concrete form stated in the caption. If the caption does not state any concrete discount amount or kind, set value to an empty string ""; do NOT invent a placeholder like "Discount".
     * discount_description: a one-sentence English description with any extra context (e.g. "20% off your first order", "Free shipping on orders over €50").
 - Set percentage to the integer percent only when the discount is a percentage; otherwise null.
 - If the caption is in a non-English language (Dutch, German, etc.) translate value and discount_description to English.
