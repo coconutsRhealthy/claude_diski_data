@@ -202,7 +202,19 @@ def _cli(argv: list[str]) -> int:
     if args.cmd == "merge":
         reg.merge(args.from_id, args.into_id)
         reg.save()
-        print(f"Merged {args.from_id} → {args.into_id}")
+        # Migrate any codes registered under the old canonical so the
+        # codes registry and public feed stay in sync.
+        from .registry import CodesRegistry, regenerate_public_feed
+
+        new_display_name = reg._entries[args.into_id]["display_name"]
+        codes = CodesRegistry()
+        moved = codes.migrate_canonical(args.from_id, args.into_id, new_display_name)
+        codes.save()
+        feed_size = regenerate_public_feed()
+        print(
+            f"Merged company {args.from_id} → {args.into_id}; "
+            f"migrated {moved} code(s); public feed now {feed_size} entries."
+        )
         return 0
     if args.cmd == "rename":
         reg.rename(args.canonical_id, args.display_name)

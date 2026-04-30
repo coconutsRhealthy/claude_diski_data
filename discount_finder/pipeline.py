@@ -8,7 +8,28 @@ from pathlib import Path
 from . import config, loader
 from .companies import CompanyRegistry
 from .prescan import is_likely_discount_post
-from .registry import CodesRegistry
+from .registry import CodesRegistry, public_entry
+
+
+_PLACEHOLDER_COMPANY_EXACT = {
+    "n/a", "na", "unspecified", "various", "multiple",
+    "the brand", "the shop", "brand", "shop",
+}
+
+
+def _is_placeholder_company(raw: str) -> bool:
+    """True if the LLM emitted a generic placeholder instead of a real brand.
+
+    Belt-and-suspenders alongside the prompt rule: catches "Unknown",
+    "Unknown Electric Mop Brand", "n/a", etc., so they never reach the
+    registry or the public feed.
+    """
+    s = (raw or "").strip().lower()
+    if not s:
+        return True
+    if s.startswith("unknown"):
+        return True
+    return s in _PLACEHOLDER_COMPANY_EXACT
 
 
 def _chunks(items: list, size: int):
@@ -86,6 +107,8 @@ def run(
             post = item["post"]
             for code in r.get("discount_codes", []):
                 raw_company = code["company"].strip()
+                if _is_placeholder_company(raw_company):
+                    continue
                 canonical_id, display_name = registry.resolve(raw_company)
                 discount_codes.append(
                     {
@@ -151,7 +174,7 @@ def run(
     public = {
         "generated_at": output["generated_at"],
         "discount_codes": [
-            _public_entry(e) for e in codes_registry.all_published_sorted()
+            public_entry(e) for e in codes_registry.all_published_sorted()
         ],
     }
     public_path = config.PUBLIC_OUTPUT_PATH
@@ -165,27 +188,3 @@ def run(
     )
     print(f"Wrote public feed to {public_path} ({len(public['discount_codes'])} codes)")
     return output
-
-
-def _public_entry(entry: dict) -> dict:
-    """Trim a full entry to the four fields the frontend consumes."""
-    # Use the LLM's short `value`. When no concrete discount was stated in the
-    # caption, `value` is empty — emit null so the frontend can render the
-    # entry without a discount badge instead of a vague placeholder.
-    raw_value = (entry.get("value") or "").strip()
-    discount = raw_value or None
-
-    # Prefer last_published_at (the day the code went on the feed) so the
-    # "date" matches the feed's sort order. Fall back to post_timestamp for
-    # older entries written before the registry existed.
-    date_str = entry.get("last_published_at")
-    if not date_str:
-        ts = entry.get("post_timestamp") or ""
-        date_str = ts[:10] if len(ts) >= 10 else ts
-
-    return {
-        "company": entry["company"],
-        "code": entry["code"],
-        "discount": discount,
-        "date": date_str,
-    }
