@@ -12,8 +12,11 @@ Be strict:
 - A "discount code" is a specific token (letters/numbers) the user types at checkout to get a discount.
 - Hashtags, ad disclosures (#ad, #adv, #gifted), affiliate links without a typeable code, and giveaway entries are NOT discount codes.
 - The company is the brand whose products the code applies to (usually the @-mentioned brand or the brand named in the caption), NOT the influencer posting it.
-- Extract the discount itself when stated (e.g. "20%", "free shipping", "€10 off"). If unclear, set percentage to null and put what you know in discount_description.
-- If the caption is in a non-English language (Dutch, German, etc.) translate the discount_description to English.
+- Extract the discount itself when stated. Always populate two fields:
+    * value: a short, frontend-friendly label — at most ~20 characters. Examples: "20%", "€10 off", "Free shipping", "BOGO", "2 for 1", "$5 off". Prefer the most concrete form available; if you only know it's a discount but not the amount, use "Discount".
+    * discount_description: a one-sentence English description with any extra context (e.g. "20% off your first order", "Free shipping on orders over €50").
+- Set percentage to the integer percent only when the discount is a percentage; otherwise null.
+- If the caption is in a non-English language (Dutch, German, etc.) translate value and discount_description to English.
 - If a post does not contain a usable discount code, return has_discount_code: false and an empty discount_codes array.
 
 Return one result object per input post, in the same order, keyed by post_index."""
@@ -37,10 +40,11 @@ def _build_schema() -> dict:
                                 "properties": {
                                     "code": {"type": "string"},
                                     "company": {"type": "string"},
+                                    "value": {"type": "string"},
                                     "discount_description": {"type": "string"},
                                     "percentage": {"type": ["integer", "null"]},
                                 },
-                                "required": ["code", "company", "discount_description", "percentage"],
+                                "required": ["code", "company", "value", "discount_description", "percentage"],
                                 "additionalProperties": False,
                             },
                         },

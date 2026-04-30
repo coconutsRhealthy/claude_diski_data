@@ -17,8 +17,11 @@ BATCH_SIZE = 10
 # context lives in the first ~1500 chars; trimming saves input tokens.
 CAPTION_MAX_CHARS = 1500
 
-# Where to write the frontend-facing JSON.
+# Full pipeline output (everything we know about each code).
 OUTPUT_PATH = ROOT / "output" / "discount_codes.json"
+
+# Trimmed file the frontend consumes — derived from OUTPUT_PATH.
+PUBLIC_OUTPUT_PATH = ROOT / "output" / "discount_codes_public.json"
 
 # Default local input file (export from Apify Instagram scraper).
 DEFAULT_INPUT_PATH = ROOT / "dataset_instagram-scraper_2026-04-29_03-34-34-770.json"

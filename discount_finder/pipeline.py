@@ -92,6 +92,7 @@ def run(
                         "canonical_company_id": canonical_id,
                         "company": display_name,
                         "company_raw": raw_company,
+                        "value": (code.get("value") or "").strip(),
                         "discount_description": code["discount_description"].strip(),
                         "percentage": code.get("percentage"),
                         "post_url": post.get("url"),
@@ -130,5 +131,36 @@ def run(
     with open(output_path, "w") as f:
         json.dump(output, f, indent=2, default=str, ensure_ascii=False)
 
+    # Trimmed feed for the frontend — the full file stays as the source of truth.
+    public = {
+        "generated_at": output["generated_at"],
+        "discount_codes": [_public_entry(e) for e in final],
+    }
+    public_path = config.PUBLIC_OUTPUT_PATH
+    public_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(public_path, "w") as f:
+        json.dump(public, f, indent=2, default=str, ensure_ascii=False)
+
     print(f"\nWrote {len(final)} discount codes to {output_path}")
+    print(f"Wrote public feed to {public_path}")
     return output
+
+
+def _public_entry(entry: dict) -> dict:
+    """Trim a full entry to the four fields the frontend consumes."""
+    # Prefer the LLM's short `value`; fall back to a percentage or the long
+    # description so older entries written before `value` existed still render.
+    value = entry.get("value") or ""
+    if not value:
+        pct = entry.get("percentage")
+        value = f"{pct}%" if isinstance(pct, int) else (entry.get("discount_description") or "")
+
+    ts = entry.get("post_timestamp") or ""
+    date = ts[:10] if len(ts) >= 10 else ts  # ISO timestamp → "YYYY-MM-DD"
+
+    return {
+        "company": entry["company"],
+        "code": entry["code"],
+        "discount": value,
+        "date": date,
+    }
