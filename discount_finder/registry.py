@@ -39,6 +39,7 @@ def public_entry(entry: dict) -> dict:
         date_str = ts[:10] if len(ts) >= 10 else ts
 
     return {
+        "company_id": entry.get("canonical_company_id"),
         "company": entry["company"],
         "code": entry["code"],
         "discount": discount,
