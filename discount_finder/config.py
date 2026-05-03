@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -43,6 +44,11 @@ def codes_registry_path(market: str) -> Path:
 
 def public_output_path(market: str) -> Path:
     return ROOT / "output" / market / "discount_codes_public.json"
+
+
+def social_output_dir(market: str, run_date: date) -> Path:
+    """Per-day folder for the .txt list and carousel images of fresh codes."""
+    return ROOT / "output" / market / "social" / run_date.isoformat()
 
 
 def apify_dataset_env(market: str) -> str:
