@@ -79,14 +79,21 @@ def _sort_fresh(fresh: list[dict]) -> list[dict]:
 
 
 def write_text_list(fresh: list[dict], out_dir: Path) -> Path | None:
-    """Numbered alphabetised "N. Company - CODE" list. Returns None if no codes."""
+    """Numbered alphabetised "N. Company - CODE - post_url" list.
+
+    The post URL is omitted on lines where it's missing rather than
+    rendering a dangling " - ". Returns None if there are no codes.
+    """
     if not fresh:
         return None
     sorted_fresh = _sort_fresh(fresh)
-    lines = [
-        f"{i}. {e['company']} - {e['code']}"
-        for i, e in enumerate(sorted_fresh, start=1)
-    ]
+    lines = []
+    for i, e in enumerate(sorted_fresh, start=1):
+        line = f"{i}. {e['company']} - {e['code']}"
+        post_url = (e.get("post_url") or "").strip()
+        if post_url:
+            line += f" - {post_url}"
+        lines.append(line)
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / "new_codes.txt"
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
