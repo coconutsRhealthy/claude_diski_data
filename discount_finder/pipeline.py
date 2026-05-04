@@ -72,14 +72,10 @@ def run(
     public_path = config.public_output_path(market)
     codes_path = config.codes_registry_path(market)
 
-    # 1. Resolve the input source for this market. For --apify-run we also
-    #    capture the URL list up-front so the handle ledger can credit
-    #    runs_scraped to handles whose accounts returned no posts.
-    intended_handles: set[str] = set()
+    # 1. Resolve the input source for this market.
     if apify_run:
-        from .apify_runner import load_urls, run_actor_for_market
+        from .apify_runner import run_actor_for_market
 
-        intended_handles = set(load_urls(market))
         items, dataset_id = run_actor_for_market(market)
         source = f"apify-run:{dataset_id}"
     elif apify_dataset_id:
@@ -240,42 +236,6 @@ def run(
         print(
             f"Wrote {len(image_paths)} carousel image(s) to {social_dir}"
         )
-
-    # 8. Update the self-learning handle ledger. ``intended_handles`` covers
-    #    the URL list we sent to the scraper (when --apify-run); for other
-    #    paths we fall back to "everyone whose post we observed" so the ledger
-    #    still accumulates code history.
-    from .handles import HandlePool
-
-    pool = HandlePool(market)
-    if not pool.path.exists():
-        # First run for this market — backfill stats from the codes registry
-        # so we don't lose history that pre-dates the ledger.
-        pool.bootstrap_from_codes(today)
-
-    observed_handles = {it.get("profile") for it in items if it.get("profile")}
-    if not intended_handles:
-        intended_handles = observed_handles
-
-    codes_by_handle: dict[str, int] = {}
-    for entry in enriched:
-        if not entry.get("is_fresh"):
-            continue
-        h = entry.get("influencer")
-        if h:
-            codes_by_handle[h] = codes_by_handle.get(h, 0) + 1
-
-    record = pool.record_run(
-        intended_handles=intended_handles,
-        codes_by_handle=codes_by_handle,
-        run_date=today,
-    )
-    pool.save()
-    print(
-        f"Handle ledger: {record['intended']:,} handles updated, "
-        f"{record['with_codes']:,} yielded fresh codes "
-        f"(pool size: {len(pool):,})"
-    )
 
     # Returned for programmatic callers; never written to disk.
     return {

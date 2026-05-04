@@ -42,11 +42,6 @@ def codes_registry_path(market: str) -> Path:
     return ROOT / "data" / market / "codes.json"
 
 
-def handles_path(market: str) -> Path:
-    """Per-market handle pool ledger (Awin imports + scrape/code history)."""
-    return ROOT / "data" / market / "handles.json"
-
-
 def public_output_path(market: str) -> Path:
     return ROOT / "output" / market / "discount_codes_public.json"
 
