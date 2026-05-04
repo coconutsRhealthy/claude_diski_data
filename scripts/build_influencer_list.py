@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Rank an Awin publisher TSV into a candidate influencers.txt.
 
-Filters to publishers whose website is an Instagram profile, drops a
-denylist of known aggregator/network publishers, drops zero-sale and
-low-conversion rows, then sorts by Awin commission and caps at --top.
+Filters to publishers whose website is an Instagram profile and drops a
+denylist of known aggregator/network publishers. Quality filters (zero
+sales, low conversion rate) only kick in when the resulting IG-URL pool
+exceeds --top — small markets keep the full pool unfiltered. When
+filtering does apply, the result is hard-capped at --top.
 
 Outputs:
   inputs/<market>/influencers_ranked.txt   — one IG URL per line, drop-in
@@ -92,17 +94,23 @@ def main() -> int:
         help="Market name. Used to derive the default --out path.",
     )
     parser.add_argument(
-        "--top", type=int, default=1500,
-        help="Keep the top N publishers after filtering & sorting (default: 1500).",
+        "--top", type=int, default=1375,
+        help="Target operational list size (default: 1375). Adaptive: quality "
+             "filters (--cr-min, --sales-min) only kick in when the IG-URL pool "
+             "exceeds this number. If filtering still leaves more than --top, "
+             "the result is hard-capped here. Pools at or below --top are kept "
+             "unfiltered so small markets aren't decimated.",
     )
     parser.add_argument(
         "--cr-min", type=float, default=0.02,
         help="Minimum sales/clicks ratio (0.02 = 2%%). Drops linktree-style "
-             "publishers who get clicks but rarely convert via codes.",
+             "publishers who get clicks but rarely convert via codes. Only "
+             "applied when the IG-URL pool exceeds --top.",
     )
     parser.add_argument(
         "--sales-min", type=int, default=1,
-        help="Minimum number of attributed sales (default: 1).",
+        help="Minimum number of attributed sales (default: 1). Only applied "
+             "when the IG-URL pool exceeds --top.",
     )
     parser.add_argument(
         "--out", type=Path,
@@ -122,11 +130,11 @@ def main() -> int:
     seen = 0
     excluded_no_ig = 0
     excluded_aggregator = 0
-    excluded_low_sales = 0
-    excluded_low_cr = 0
 
-    rows_by_handle: dict[str, dict] = {}
-
+    # Phase 1: build the IG-URL pool. Only the IG-gate and the aggregator
+    # denylist apply here — quality filters are deferred until we know the
+    # pool size, so small markets aren't decimated unnecessarily.
+    pool: dict[str, dict] = {}
     with args.tsv.open(encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f, delimiter="\t")
         for row in reader:
@@ -143,13 +151,7 @@ def main() -> int:
             clicks = parse_number(row.get("Clicks"))
             commission = parse_number(row.get("Commission"))
             order_value = parse_number(row.get("Order Value"))
-            if sales < args.sales_min:
-                excluded_low_sales += 1
-                continue
             cr = (sales / clicks) if clicks else 0.0
-            if cr < args.cr_min:
-                excluded_low_cr += 1
-                continue
             entry = {
                 "handle": handle,
                 "publisher": publisher,
@@ -163,16 +165,53 @@ def main() -> int:
             }
             # The same handle can appear under multiple Publisher IDs (e.g.
             # creator + their management agency). Keep the higher-commission row.
-            existing = rows_by_handle.get(handle)
+            existing = pool.get(handle)
             if existing is None or entry["commission"] > existing["commission"]:
-                rows_by_handle[handle] = entry
+                pool[handle] = entry
 
-    candidates = sorted(
-        rows_by_handle.values(),
-        key=lambda e: (e["commission"], e["sales"]),
-        reverse=True,
-    )
-    capped = candidates[: args.top]
+    pool_size = len(pool)
+
+    # Phase 2: select up to args.top entries from the pool.
+    #
+    # Pool ≤ target          → ship the whole pool, no filtering.
+    # Pool > target, F ≥ T   → apply filters, hard-cap at target ("UK case").
+    # Pool > target, F < T   → apply filters, then back-fill from the
+    #                          highest-commission non-passers until we hit
+    #                          the target ("Germany case"). The filtered
+    #                          handles are kept on top of the list.
+    by_commission = lambda e: (e["commission"], e["sales"])
+    excluded_low_sales = 0
+    excluded_low_cr = 0
+    backfill_count = 0
+
+    if pool_size <= args.top:
+        mode = "unfiltered"
+        capped = sorted(pool.values(), key=by_commission, reverse=True)
+    else:
+        passed = []
+        for e in pool.values():
+            if e["sales"] < args.sales_min:
+                excluded_low_sales += 1
+                continue
+            if e["cr"] < args.cr_min:
+                excluded_low_cr += 1
+                continue
+            passed.append(e)
+        passed.sort(key=by_commission, reverse=True)
+
+        if len(passed) >= args.top:
+            mode = "filtered_capped"
+            capped = passed[: args.top]
+        else:
+            mode = "filtered_backfilled"
+            passed_handles = {e["handle"] for e in passed}
+            backfill_pool = sorted(
+                (e for e in pool.values() if e["handle"] not in passed_handles),
+                key=by_commission,
+                reverse=True,
+            )
+            backfill_count = args.top - len(passed)
+            capped = passed + backfill_pool[:backfill_count]
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8") as f:
@@ -201,17 +240,40 @@ def main() -> int:
                 f"{e['comm_per_click']:.4f}",
             ])
 
-    print(
-        f"\nRead {seen:,} rows from {args.tsv}\n"
-        f"  excluded: not an IG URL           = {excluded_no_ig:,}\n"
-        f"  excluded: aggregator/network      = {excluded_aggregator:,}\n"
-        f"  excluded: < {args.sales_min} sale(s)              = {excluded_low_sales:,}\n"
-        f"  excluded: CR < {args.cr_min*100:.1f}%               = {excluded_low_cr:,}\n"
-        f"  unique IG handles after filters   = {len(rows_by_handle):,}\n"
-        f"  written to {out_path} (top {len(capped):,} by commission)\n"
-        f"  audit sidecar at {sidecar_path}",
-        file=sys.stderr,
-    )
+    passed_count = pool_size - excluded_low_sales - excluded_low_cr
+    lines = [
+        f"\nRead {seen:,} rows from {args.tsv}",
+        f"  excluded: not an IG URL           = {excluded_no_ig:,}",
+        f"  excluded: aggregator/network      = {excluded_aggregator:,}",
+        f"  IG handle pool                    = {pool_size:,}",
+    ]
+    if mode == "unfiltered":
+        lines.append(
+            f"  pool ≤ target ({args.top:,}) → quality filters skipped, keeping full pool."
+        )
+        lines.append(f"  written to {out_path} ({len(capped):,} handles, no cap)")
+    else:
+        lines.append(
+            f"  pool > target ({args.top:,}) → applying quality filters:"
+        )
+        lines.append(f"    excluded: < {args.sales_min} sale(s)            = {excluded_low_sales:,}")
+        lines.append(f"    excluded: CR < {args.cr_min*100:.1f}%             = {excluded_low_cr:,}")
+        lines.append(f"  passed filters                    = {passed_count:,}")
+        if mode == "filtered_capped":
+            lines.append(
+                f"  written to {out_path} (top {len(capped):,} by commission, hard-capped)"
+            )
+        else:  # filtered_backfilled
+            lines.append(
+                f"  filtered count < target → back-filled with {backfill_count:,} "
+                f"highest-commission non-passers."
+            )
+            lines.append(
+                f"  written to {out_path} ({len(capped):,} handles: "
+                f"{passed_count:,} filtered + {backfill_count:,} backfill)"
+            )
+    lines.append(f"  audit sidecar at {sidecar_path}")
+    print("\n".join(lines), file=sys.stderr)
     return 0
 
 
