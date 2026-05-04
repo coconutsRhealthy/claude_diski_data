@@ -9,8 +9,11 @@ _KEYWORDS = re.compile(
   | coupon
   | gebruik\s+code | met\s+code
   | rabattcode | rabatt | gutschein # DE
+  | code\s+promo | code\s+de\s+r[eé]duction          # FR "code promo", "code de réduction"
+  | r[eé]duction | remise                            # FR generic discount terms
+  | avec\s+le\s+code | utilisez\s+le\s+code          # FR "with/use the code"
   | code\s*[:=]                     # "code: XXX" or "code=XXX"
-  | \b\d{1,2}\s*%\s*(off|korting|rabatt) # "20% off", "20% korting"
+  | \b\d{1,2}\s*%\s*(off|korting|rabatt|r[eé]duction|remise) # "20% off", "20% de réduction"
   | \bcodice\b | \bsconto\b         # IT
     """,
     re.IGNORECASE | re.VERBOSE,

@@ -61,6 +61,7 @@ _TITLES = {
     "germany": "NEUE RABATTCODES",
     "belgium": "NIEUWE KORTINGSCODES",
     "uk": "NEW DISCOUNT CODES",
+    "france": "NOUVEAUX CODES PROMO",
 }
 _DEFAULT_TITLE = "NEW DISCOUNT CODES"
 
@@ -71,6 +72,7 @@ _MARKET_LABELS = {
     "germany": "Germany",
     "belgium": "Belgium",
     "uk": "United Kingdom",
+    "france": "France",
 }
 
 
