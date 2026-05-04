@@ -26,7 +26,7 @@ CAPTION_MAX_CHARS = 1500
 #   inputs/<market>/dataset_*.json      Apify exports (gitignored)
 #   data/<market>/codes.json            persistent codes registry
 #   output/<market>/discount_codes*.json full + public outputs
-MARKETS: list[str] = ["germany", "belgium"]
+MARKETS: list[str] = ["germany", "belgium", "uk"]
 
 # Shared across all markets — brand identity is universal, so Shein in
 # Germany and Shein in Belgium share one canonical id.

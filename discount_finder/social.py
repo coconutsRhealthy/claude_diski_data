@@ -60,8 +60,18 @@ _FONT_PATHS_BOLD = [
 _TITLES = {
     "germany": "NEUE RABATTCODES",
     "belgium": "NIEUWE KORTINGSCODES",
+    "uk": "NEW DISCOUNT CODES",
 }
 _DEFAULT_TITLE = "NEW DISCOUNT CODES"
+
+# Human-friendly subtitle label per market. Falls back to ``market.title()``
+# which works for single-word names like "germany" → "Germany" but produces
+# ugly output for short codes like "uk" → "Uk".
+_MARKET_LABELS = {
+    "germany": "Germany",
+    "belgium": "Belgium",
+    "uk": "United Kingdom",
+}
 
 
 def _sort_fresh(fresh: list[dict]) -> list[dict]:
@@ -128,7 +138,8 @@ def write_carousel_images(
         # Header
         title = _TITLES.get(market, _DEFAULT_TITLE)
         _text_centered(draw, title, CANVAS_W // 2, 105, title_font, TEXT_COLOR)
-        subtitle = f"{market.title()}  ·  {run_date.strftime('%b %d, %Y')}"
+        market_label = _MARKET_LABELS.get(market, market.title())
+        subtitle = f"{market_label}  ·  {run_date.strftime('%b %d, %Y')}"
         _text_centered(draw, subtitle, CANVAS_W // 2, 180, subtitle_font, MUTED_COLOR)
 
         # Body

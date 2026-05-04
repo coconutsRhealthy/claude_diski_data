@@ -36,7 +36,7 @@ _REGION_SUFFIXES = {
     "deutschland", "germany", "österreich", "osterreich", "austria",
     "schweiz", "switzerland", "nederland", "netherlands", "belgique",
     "belgië", "belgie", "belgium", "france", "italia", "italy", "españa",
-    "espana", "spain", "portugal",
+    "espana", "spain", "portugal", "britain", "united", "kingdom",
     # TLD-ish suffixes: after "." → " " replacement, "shein.com" becomes
     # "shein com" so dropping "com" here collapses bare/.com forms.
     "com", "net", "org", "io", "app",
