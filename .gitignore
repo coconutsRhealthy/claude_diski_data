@@ -24,8 +24,13 @@ data/
 # Large Apify dataset exports
 dataset_*.json
 
-# Per-market input folders (Apify exports live here, big binary blobs)
-inputs/
+# Per-market input folders (Apify exports live here, big binary blobs).
+# Track only the curated influencers.txt — generated rankings and
+# new_data/ stay ignored.
+inputs/*
+!inputs/*/
+inputs/*/*
+!inputs/*/influencers.txt
 
 # macOS
 .DS_Store
