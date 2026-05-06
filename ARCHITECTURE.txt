@@ -6,7 +6,7 @@ deployment of the claude_diski_data pipeline on a DigitalOcean droplet.
 The data project (this repo) and a separate frontend project share the
 same droplet.
 
-Last updated: 2026-05-06.
+Last updated: 2026-05-06 (post-OOM swap fix).
 
 
 -----------------------------------------------------------------------
@@ -35,14 +35,20 @@ Cadence:  every Mon/Wed/Fri at 02:00 Amsterdam time.
   Login       root  (SSH key set up at droplet creation)
   Region      AMS3 (Amsterdam)
   Specs       1 GB RAM / 1 vCPU / 25 GB SSD
+  Swap        2 GB swapfile at /swapfile (persisted in /etc/fstab),
+              vm.swappiness=10 via /etc/sysctl.d/99-swap.conf
   OS          Ubuntu 24.04 LTS
   Timezone    Europe/Amsterdam (set via timedatectl; cron handles DST)
   Docker      29.x, installed from Docker's official apt repo
               (NOT the Ubuntu apt docker.io package).
 
-Memory note: 1 GB is tight. If a container exits with code 137 or
-"Killed" appears in dmesg, that's OOM — resize to 2 GB in the DO
-dashboard (takes ~30s).
+Memory note: the first cron run (2026-05-06) OOM-killed all three
+markets — peak Python RSS during the Apify dataset fetch + parse was
+~700 MB, which doesn't fit in 1 GB after Docker daemon + OS overhead.
+Fix applied: 2 GB swapfile, swappiness lowered so swap is a safety
+net rather than a regular memory tier. Subsequent runs completed
+end-to-end. If swap usage routinely exceeds ~500 MB or runs slow to
+the point of overlap, resize to 2 GB RAM in the DO dashboard.
 
 
 -----------------------------------------------------------------------
@@ -102,23 +108,22 @@ layer is cached and skips it, leaving you on stale code.
 5. CRON ORCHESTRATION
 -----------------------------------------------------------------------
 
-Single crontab entry (root):
+Single crontab entry (root), as currently deployed:
 
-  0 2 * * 1,3,5  /srv/diski/run-pipeline.sh france \
-              && /srv/diski/run-pipeline.sh germany \
-              && /srv/diski/run-pipeline.sh uk
+  0 2 * * 1,3,5 /srv/diski/run-pipeline.sh france  && /srv/diski/run-frontend.sh france  ; \
+                /srv/diski/run-pipeline.sh germany && /srv/diski/run-frontend.sh germany ; \
+                /srv/diski/run-pipeline.sh uk      && /srv/diski/run-frontend.sh uk
 
-Sequential (`&&`) rather than parallel — keeps memory pressure low on
-1 GB and means a hard failure on France stops Germany and UK (intended:
-avoids burning 3× Apify+Anthropic budget on a broken pipeline).
+Two-tier semantics on purpose:
 
-When the frontend project lands, the cron will be extended per country:
+  &&  WITHIN a country: frontend deploy only runs if that country's
+      pipeline succeeded. No deploy of stale data when scraping fails.
+  ;   BETWEEN countries: a failed market does NOT block the others.
+      France OOMing should not punish Germany and UK.
 
-  0 2 * * 1,3,5  /srv/diski/run-pipeline.sh france  && /srv/diski/run-frontend.sh france  \
-              && /srv/diski/run-pipeline.sh germany && /srv/diski/run-frontend.sh germany \
-              && /srv/diski/run-pipeline.sh uk      && /srv/diski/run-frontend.sh uk
-
-Frontend rebuilds only when its country's pipeline succeeded.
+Sequential rather than parallel — keeps memory pressure low on a
+1 GB droplet (each pipeline peaks ~700 MB RSS, so two in parallel
+would OOM even with swap).
 
 The wrapper script (scripts/run-pipeline.sh in the repo, deployed to
 /srv/diski/run-pipeline.sh on the droplet):
@@ -247,8 +252,9 @@ Inter-container triggering: host cron, NOT container-to-container.
   - Considered: pipeline container `docker run`s the frontend container.
   - Decision: would require mounting /var/run/docker.sock into the
     pipeline container — effectively root on host. Avoidable.
-  - Host cron with `&&` chaining is simpler and gives the dependency
-    semantics we want.
+  - Host cron with mixed `&&`/`;` chaining is simpler and gives the
+    dependency semantics we want (frontend gated on its own pipeline
+    success; markets independent of each other — see section 5).
 
 State location: host volumes, never baked into images.
   - Means cycle of "rebuild image" never wipes data/ or output/.
@@ -273,8 +279,11 @@ Curated inputs in git, generated state out: see section 6.
   irreplaceable. Options: enable DO snapshots, or schedule a periodic
   rsync to laptop / R2.
 
-- 1 GB RAM is tight. If the frontend Node build or the UK pipeline
-  starts OOMing, resize to 2 GB.
+- 1 GB RAM was insufficient for the dataset fetch + parse step
+  (peak ~700 MB RSS per Python process). Mitigated with a 2 GB
+  swapfile + vm.swappiness=10. Swap usage during a run is brief and
+  modest, but if it routinely climbs past ~500 MB or runs noticeably
+  drag, resize to 2 GB RAM.
 
 - No alerting on cron failures. If a Wed-night run dies, you find out
   Thursday morning. Could pipe wrapper script output to a webhook
@@ -291,6 +300,7 @@ Curated inputs in git, generated state out: see section 6.
   droplet. Eventual plan: push to R2 after each run, keep local as
   cache.
 
-- Frontend project is not yet deployed. Briefing for that work is
-  in the conversation history; same droplet, same patterns, separate
-  Dockerfile, separate wrapper script, extends the cron chain.
+- Frontend project is deployed alongside this one on the droplet.
+  /srv/diski/Dockerfile.frontend and /srv/diski/run-frontend.sh are
+  the frontend's analogues of this project's files. The cron in
+  section 5 chains pipeline and frontend per country.
