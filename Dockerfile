@@ -3,7 +3,7 @@
 FROM python:3.12-slim
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git ca-certificates \
+    && apt-get install -y --no-install-recommends git ca-certificates fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 ARG REPO_URL=https://github.com/coconutsRhealthy/claude_diski_data.git

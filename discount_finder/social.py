@@ -65,15 +65,33 @@ _TITLES = {
 }
 _DEFAULT_TITLE = "NEW DISCOUNT CODES"
 
-# Human-friendly subtitle label per market. Falls back to ``market.title()``
-# which works for single-word names like "germany" → "Germany" but produces
-# ugly output for short codes like "uk" → "Uk".
-_MARKET_LABELS = {
-    "germany": "Germany",
-    "belgium": "Belgium",
-    "uk": "United Kingdom",
-    "france": "France",
+# Localized month names and date formatting per market. We render the date
+# without a country label (the title already implies the market), so the
+# format must read naturally in the country's own convention.
+_MONTH_NAMES = {
+    "germany": ["Januar", "Februar", "März", "April", "Mai", "Juni",
+                "Juli", "August", "September", "Oktober", "November", "Dezember"],
+    "belgium": ["januari", "februari", "maart", "april", "mei", "juni",
+                "juli", "augustus", "september", "oktober", "november", "december"],
+    "uk":      ["January", "February", "March", "April", "May", "June",
+                "July", "August", "September", "October", "November", "December"],
+    "france":  ["janvier", "février", "mars", "avril", "mai", "juin",
+                "juillet", "août", "septembre", "octobre", "novembre", "décembre"],
 }
+_DATE_FORMATS = {
+    "germany": "{d}. {m} {y}",   # "6. Mai 2026"
+    "belgium": "{d} {m} {y}",     # "6 mei 2026"
+    "uk":      "{d} {m} {y}",     # "6 May 2026"
+    "france":  "{d} {m} {y}",     # "6 mai 2026"
+}
+
+
+def _format_date(market: str, run_date: date) -> str:
+    months = _MONTH_NAMES.get(market)
+    fmt = _DATE_FORMATS.get(market)
+    if not months or not fmt:
+        return run_date.strftime("%b %d, %Y")
+    return fmt.format(d=run_date.day, m=months[run_date.month - 1], y=run_date.year)
 
 
 def _sort_fresh(fresh: list[dict]) -> list[dict]:
@@ -147,8 +165,7 @@ def write_carousel_images(
         # Header
         title = _TITLES.get(market, _DEFAULT_TITLE)
         _text_centered(draw, title, CANVAS_W // 2, 105, title_font, TEXT_COLOR)
-        market_label = _MARKET_LABELS.get(market, market.title())
-        subtitle = f"{market_label}  ·  {run_date.strftime('%b %d, %Y')}"
+        subtitle = _format_date(market, run_date)
         _text_centered(draw, subtitle, CANVAS_W // 2, 180, subtitle_font, MUTED_COLOR)
 
         # Body
@@ -188,17 +205,14 @@ def write_carousel_images(
                     fill=DIVIDER_COLOR, width=1,
                 )
 
-        # Footer
-        footer_cy = CANVAS_H - FOOTER_HEIGHT // 2
+        # Footer: page indicator only (vertically centered in the footer
+        # band). Single-page carousels render with an empty footer band.
         if total_pages > 1:
+            footer_cy = CANVAS_H - FOOTER_HEIGHT // 2
             _text_centered(
                 draw, f"{page_idx} / {total_pages}",
-                CANVAS_W // 2, footer_cy - 20, footer_font, MUTED_COLOR,
+                CANVAS_W // 2, footer_cy, footer_font, MUTED_COLOR,
             )
-        _text_centered(
-            draw, "@diski.nl",
-            CANVAS_W // 2, footer_cy + 22, footer_font, MUTED_COLOR,
-        )
 
         path = out_dir / f"carousel_{page_idx:02d}.png"
         img.save(path, "PNG", optimize=True)
