@@ -1,0 +1,296 @@
+DEPLOYMENT ARCHITECTURE
+=======================
+
+This file is a reference for future sessions. It describes the production
+deployment of the claude_diski_data pipeline on a DigitalOcean droplet.
+The data project (this repo) and a separate frontend project share the
+same droplet.
+
+Last updated: 2026-05-06.
+
+
+-----------------------------------------------------------------------
+1. THE BIG PICTURE
+-----------------------------------------------------------------------
+
+This pipeline scrapes Instagram via Apify, extracts discount codes via
+the Anthropic API, and writes a JSON feed per country. A separate
+frontend project on the same droplet consumes the JSON, rebuilds a
+static site per country, and deploys it to Cloudflare Pages via
+`wrangler`.
+
+Markets in production (on cron):  france, germany, uk
+Belgium exists in code (config.MARKETS) but is NOT scheduled.
+
+Cadence:  every Mon/Wed/Fri at 02:00 Amsterdam time.
+          Roughly "every 48h" — gaps are 48h / 48h / 72h.
+
+
+-----------------------------------------------------------------------
+2. THE DROPLET
+-----------------------------------------------------------------------
+
+  Name        diski-int
+  IP          142.93.141.218
+  Login       root  (SSH key set up at droplet creation)
+  Region      AMS3 (Amsterdam)
+  Specs       1 GB RAM / 1 vCPU / 25 GB SSD
+  OS          Ubuntu 24.04 LTS
+  Timezone    Europe/Amsterdam (set via timedatectl; cron handles DST)
+  Docker      29.x, installed from Docker's official apt repo
+              (NOT the Ubuntu apt docker.io package).
+
+Memory note: 1 GB is tight. If a container exits with code 137 or
+"Killed" appears in dmesg, that's OOM — resize to 2 GB in the DO
+dashboard (takes ~30s).
+
+
+-----------------------------------------------------------------------
+3. DIRECTORY LAYOUT ON THE DROPLET
+-----------------------------------------------------------------------
+
+  /srv/diski/
+    .env                    # secrets — ANTHROPIC_API_KEY, APIFY_TOKEN
+    Dockerfile              # the pipeline's Dockerfile (scp'd from laptop)
+    run-pipeline.sh         # cron wrapper, also tracked at scripts/run-pipeline.sh in repo
+    data/                   # persistent pipeline state (HOST VOLUME)
+      companies.json        # canonical company registry (auto-grows)
+      <market>/codes.json   # accumulated discount codes per market
+      <market>/handles.json # observed Instagram handle metadata
+    inputs/                 # pipeline inputs (HOST VOLUME)
+      <market>/influencers.txt          # curated, also in git
+      <market>/influencers_ranked.{txt,tsv}  # generated, NOT in git
+      <market>/new_data/                # generated, NOT in git
+    output/                 # SHARED HANDOFF (HOST VOLUME)
+      <market>/discount_codes_public.json   # frontend input
+      <market>/social/                  # social-media artifacts (future R2)
+
+  /var/log/diski/
+    pipeline-<market>.log   # per-market pipeline run log
+
+The host volumes (data/, inputs/, output/) are mounted into the
+container at /app/{data,inputs,output}. The container's working
+directory is /app (the cloned repo).
+
+
+-----------------------------------------------------------------------
+4. THE DOCKER IMAGE
+-----------------------------------------------------------------------
+
+Image name:       diski-pipeline:latest
+Built ON the droplet (not via CI). The Dockerfile:
+
+  - FROM python:3.12-slim
+  - apt-get install git ca-certificates
+  - git clone --depth 1 --branch ${GIT_REF} ${REPO_URL} /app
+      REPO_URL  = https://github.com/coconutsRhealthy/claude_diski_data.git
+      GIT_REF   = main (default)
+      CACHE_BUST = arg passed via --build-arg to bust Docker's layer cache
+  - pip install -r requirements.txt
+  - ENTRYPOINT ["python", "main.py"]
+
+Build command (re-run after pushing new code to GitHub):
+
+  cd /srv/diski
+  docker build --build-arg CACHE_BUST=$(date +%s) -t diski-pipeline .
+
+The CACHE_BUST is essential. Without it, Docker thinks the git clone
+layer is cached and skips it, leaving you on stale code.
+
+
+-----------------------------------------------------------------------
+5. CRON ORCHESTRATION
+-----------------------------------------------------------------------
+
+Single crontab entry (root):
+
+  0 2 * * 1,3,5  /srv/diski/run-pipeline.sh france \
+              && /srv/diski/run-pipeline.sh germany \
+              && /srv/diski/run-pipeline.sh uk
+
+Sequential (`&&`) rather than parallel — keeps memory pressure low on
+1 GB and means a hard failure on France stops Germany and UK (intended:
+avoids burning 3× Apify+Anthropic budget on a broken pipeline).
+
+When the frontend project lands, the cron will be extended per country:
+
+  0 2 * * 1,3,5  /srv/diski/run-pipeline.sh france  && /srv/diski/run-frontend.sh france  \
+              && /srv/diski/run-pipeline.sh germany && /srv/diski/run-frontend.sh germany \
+              && /srv/diski/run-pipeline.sh uk      && /srv/diski/run-frontend.sh uk
+
+Frontend rebuilds only when its country's pipeline succeeded.
+
+The wrapper script (scripts/run-pipeline.sh in the repo, deployed to
+/srv/diski/run-pipeline.sh on the droplet):
+
+  - Takes one arg: <market>
+  - Logs to /var/log/diski/pipeline-<market>.log
+  - Runs `docker run --rm` with --env-file and three -v mounts
+
+
+-----------------------------------------------------------------------
+6. WHAT'S IN GIT vs ON HOST VOLUMES
+-----------------------------------------------------------------------
+
+In git (committed):
+  - source code
+  - Dockerfile
+  - scripts/run-pipeline.sh
+  - inputs/<market>/influencers.txt   (curated; selectively un-ignored
+                                       in .gitignore via the
+                                       inputs/* / !inputs/*/ pattern)
+
+NOT in git (on host volumes only — seeded once via rsync from laptop):
+  - data/                  (persistent state, including the
+                            irreplaceable codes.json)
+  - inputs/<market>/influencers_ranked.* and new_data/  (generated)
+  - output/                (regenerated each run)
+  - .env                   (secrets)
+
+Why companies.json (data/companies.json) is NOT in git: the LLM
+auto-extends it during runs, so committing it would mean the droplet
+diverges from git, and rebuilding the image would clobber the
+droplet's accumulated registry. It lives only on the host volume.
+
+
+-----------------------------------------------------------------------
+7. SECRETS
+-----------------------------------------------------------------------
+
+/srv/diski/.env is gitignored, lives only on the droplet, mounted into
+the container via `--env-file`. Required keys:
+
+  ANTHROPIC_API_KEY=sk-ant-...
+  APIFY_TOKEN=...
+
+Optional (per-market):
+  APIFY_DATASET_ID_<MARKET>=...   # to skip the Apify run and reuse a dataset id
+
+
+-----------------------------------------------------------------------
+8. INITIAL DEPLOY STEPS (DONE — for reference / disaster recovery)
+-----------------------------------------------------------------------
+
+1. Spin up DO droplet (1 GB / Ubuntu 24.04 / AMS3), add SSH key.
+2. SSH in, apt update/upgrade, reboot for kernel update.
+3. Install Docker from Docker's apt repo (NOT docker.io).
+4. mkdir -p /srv/diski/{data,inputs,output} and /var/log/diski.
+5. Set timezone:  timedatectl set-timezone Europe/Amsterdam
+6. From laptop, rsync `data/` and `inputs/` to /srv/diski/.
+7. From laptop, scp `.env` to /srv/diski/.env.
+8. From laptop, scp `Dockerfile` and `scripts/run-pipeline.sh` to
+   /srv/diski/. (Dockerfile is also in git; scp is the quickest
+   transport.)
+9. On droplet:  docker build --build-arg CACHE_BUST=$(date +%s) -t diski-pipeline .
+10. Smoke-test:  docker run with belgium and --dry-run (and then a real run).
+11. Add the cron entry (see section 5).
+
+
+-----------------------------------------------------------------------
+9. UPDATING DEPLOYED CODE
+-----------------------------------------------------------------------
+
+Standard flow when code changes:
+
+  Local:    git push
+  Droplet:  cd /srv/diski && docker build --build-arg CACHE_BUST=$(date +%s) -t diski-pipeline .
+
+Subsequent cron runs use the new image. There's no automatic deploy —
+the image is rebuilt manually on the droplet. Acceptable because
+deploys are infrequent and CI was deliberately skipped.
+
+If a runtime config changes (influencers.txt, companies.json, etc.):
+
+  - influencers.txt is in git AND on the host volume. The host volume
+    (/srv/diski/inputs/) is what the container actually reads, because
+    the volume mount overlays the cloned-into-image version.
+    To update on the droplet:
+      a) edit on droplet directly:  vim /srv/diski/inputs/<m>/influencers.txt
+      b) or edit locally → commit → rsync up to /srv/diski/inputs/
+
+  - companies.json: edit on droplet via the CLI:
+      docker run --rm --env-file /srv/diski/.env \
+        -v /srv/diski/data:/app/data \
+        --entrypoint python diski-pipeline \
+        -m discount_finder.companies <list|merge|rename|add-alias> ...
+    Or just edit /srv/diski/data/companies.json directly with care.
+
+
+-----------------------------------------------------------------------
+10. ARCHITECTURAL DECISIONS — WHAT WE PICKED AND WHY
+-----------------------------------------------------------------------
+
+Build pipeline: `git clone` inside the Dockerfile, build on the droplet.
+  - Considered: GitHub Container Registry (GHCR) with CI builds.
+  - Considered: local builds on Mac, scp/registry transport.
+  - Considered: committing all generated state to git.
+  - Decision: simplest path, user already familiar with git-clone-in-Dockerfile.
+    The benefits of GHCR (faster builds, better caching, reproducible
+    image SHAs) didn't justify the extra moving parts for a small
+    project.
+
+Build context for Dockerfile: only the Dockerfile lives on the droplet.
+  - Source code comes via `git clone` inside the build, NOT via
+    `COPY . .` from a populated working directory.
+
+Output handoff: shared host directory mounted into both containers.
+  - Considered: R2 (Cloudflare object storage).
+  - Considered: webhook trigger from pipeline → frontend.
+  - Considered: frontend polling for new files.
+  - Decision: shared local volume. Both projects on the same droplet
+    means R2 would be overengineering. Polling adds latency and a
+    surface for "missed updates." Webhooks add a moving part.
+  - R2 is on the roadmap for the social-media artifacts only — not
+    for the JSON feeds.
+
+Inter-container triggering: host cron, NOT container-to-container.
+  - Considered: pipeline container `docker run`s the frontend container.
+  - Decision: would require mounting /var/run/docker.sock into the
+    pipeline container — effectively root on host. Avoidable.
+  - Host cron with `&&` chaining is simpler and gives the dependency
+    semantics we want.
+
+State location: host volumes, never baked into images.
+  - Means cycle of "rebuild image" never wipes data/ or output/.
+  - Means droplet IS the source of truth for runtime state.
+  - Means droplet must be backed up separately. DO snapshots are
+    available; not enabled yet (cost ~20% of droplet price).
+
+Curated inputs in git, generated state out: see section 6.
+
+48h cadence rounded to Mon/Wed/Fri:
+  - Strict 48h doesn't fit a weekly cron (48 × 3.5 ≠ 168).
+  - Options were Mon/Wed/Fri (gaps: 48/48/72h, 3x/week) or
+    Sun/Tue/Thu/Sat (48/48/48/24h, 4x/week) or systemd timer.
+  - Picked the simple weekly pattern.
+
+
+-----------------------------------------------------------------------
+11. KNOWN LIMITATIONS / FUTURE WORK
+-----------------------------------------------------------------------
+
+- No automated backups of /srv/diski/data/. The codes.json files are
+  irreplaceable. Options: enable DO snapshots, or schedule a periodic
+  rsync to laptop / R2.
+
+- 1 GB RAM is tight. If the frontend Node build or the UK pipeline
+  starts OOMing, resize to 2 GB.
+
+- No alerting on cron failures. If a Wed-night run dies, you find out
+  Thursday morning. Could pipe wrapper script output to a webhook
+  (Slack, Discord) on non-zero exit.
+
+- Volume-mount caveat: influencers.txt is in the image (from git
+  clone) AND on the host volume. The host volume wins. Editing in git
+  + rebuild does NOT propagate to the running pipeline; you must also
+  update the host-volume copy. This is a known design tradeoff to
+  keep generated runtime state (which lives in the same `inputs/`
+  directory) on the host.
+
+- Social-media artifacts (output/<market>/social/) accumulate on the
+  droplet. Eventual plan: push to R2 after each run, keep local as
+  cache.
+
+- Frontend project is not yet deployed. Briefing for that work is
+  in the conversation history; same droplet, same patterns, separate
+  Dockerfile, separate wrapper script, extends the cron chain.
