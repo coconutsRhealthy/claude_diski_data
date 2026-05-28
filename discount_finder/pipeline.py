@@ -247,9 +247,11 @@ def run(
     print(f"Wrote public feed to {public_path} ({len(public['discount_codes'])} codes)")
 
     # 7. Per-run social artifacts: numbered .txt list and carousel images of
-    #    just the fresh codes from this run, ready for posting.
+    #    just the fresh codes from this run, ready for posting. Files are
+    #    also pushed to R2 (best-effort) for browsing / hand-off.
     fresh_only = [e for e in enriched if e["is_fresh"]]
     if fresh_only:
+        from .r2 import upload_dir
         from .social import write_carousel_images, write_text_list
 
         social_dir = config.social_output_dir(market, today)
@@ -260,6 +262,7 @@ def run(
         print(
             f"Wrote {len(image_paths)} carousel image(s) to {social_dir}"
         )
+        upload_dir(social_dir, market=market, run_date=today)
 
     # Returned for programmatic callers; never written to disk.
     return {

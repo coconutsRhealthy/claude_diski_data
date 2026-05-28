@@ -42,6 +42,10 @@ PUBLIC_DEDUP_WINDOW_DAYS = 20
 # the pool is smaller, we just scrape fewer.
 SCRAPE_TARGET_DEFAULT = 1375
 
+# Cloudflare R2 bucket for per-run social artifacts (carousel PNGs +
+# new_codes.txt). Object keys are <market>/<YYYY-MM-DD>/<filename>.
+CAROUSEL_BUCKET = "diski-carousels"
+
 
 def codes_registry_path(market: str) -> Path:
     return ROOT / "data" / market / "codes.json"
