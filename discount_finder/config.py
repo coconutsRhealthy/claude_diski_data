@@ -37,9 +37,23 @@ COMPANIES_REGISTRY_PATH = ROOT / "data" / "companies.json"
 # stays unchanged). After the window it can resurface and jump back to the top.
 PUBLIC_DEDUP_WINDOW_DAYS = 20
 
+# Per-run target for the Apify scrape. The selector picks up to this many
+# handles from data/<market>/handles.json (plus the curated pool file). If
+# the pool is smaller, we just scrape fewer.
+SCRAPE_TARGET_DEFAULT = 1375
+
 
 def codes_registry_path(market: str) -> Path:
     return ROOT / "data" / market / "codes.json"
+
+
+def handles_registry_path(market: str) -> Path:
+    return ROOT / "data" / market / "handles.json"
+
+
+def handles_pool_path(market: str) -> Path:
+    """Curated, in-git pool of candidate handles (one bare handle per line)."""
+    return ROOT / "inputs" / market / "handles_pool.txt"
 
 
 def public_output_path(market: str) -> Path:

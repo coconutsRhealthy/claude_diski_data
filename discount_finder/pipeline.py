@@ -7,6 +7,7 @@ from pathlib import Path
 
 from . import config, loader
 from .companies import CompanyRegistry
+from .handles import HandlesRegistry
 from .prescan import is_likely_discount_post
 from .registry import CodesRegistry, public_entry
 
@@ -203,6 +204,29 @@ def run(
     codes_registry.save()
     fresh_count = sum(1 for e in enriched if e["is_fresh"])
     suppressed_count = len(enriched) - fresh_count
+
+    # Attribute fresh codes back to the handles that produced them, so the
+    # next run's selector can exploit/explore based on real yield. We count
+    # fresh-only (not recent dupes) so re-scraping the same code within the
+    # dedup window doesn't inflate the score.
+    per_handle: dict[str, int] = {}
+    for e in enriched:
+        if not e["is_fresh"]:
+            continue
+        username = (e.get("influencer") or {}).get("username")
+        if not username:
+            continue
+        key = username.strip().lower()
+        if not key:
+            continue
+        per_handle[key] = per_handle.get(key, 0) + 1
+    if per_handle:
+        handles_registry = HandlesRegistry(config.handles_registry_path(market))
+        handles_registry.record_codes(per_handle, today)
+        handles_registry.save()
+        print(
+            f"Handles registry: recorded fresh codes for {len(per_handle)} handle(s)."
+        )
 
     # Public feed: cumulative view derived from the registry, sorted by
     # last_published_at desc (newest publications on top).
