@@ -33,6 +33,7 @@ _CONTENT_TYPES = {
     ".jpg":  "image/jpeg",
     ".jpeg": "image/jpeg",
     ".txt":  "text/plain; charset=utf-8",
+    ".json": "application/json; charset=utf-8",
 }
 
 

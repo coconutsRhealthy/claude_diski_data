@@ -252,16 +252,19 @@ def run(
     fresh_only = [e for e in enriched if e["is_fresh"]]
     if fresh_only:
         from .r2 import upload_dir
-        from .social import write_carousel_images, write_text_list
+        from .social import write_carousel_images, write_daily_json, write_text_list
 
         social_dir = config.social_output_dir(market, today)
         text_path = write_text_list(fresh_only, social_dir)
         image_paths = write_carousel_images(fresh_only, social_dir, market, today)
+        json_path = write_daily_json(fresh_only, social_dir, market, today)
         if text_path:
             print(f"Wrote new-codes list to {text_path}")
         print(
             f"Wrote {len(image_paths)} carousel image(s) to {social_dir}"
         )
+        if json_path:
+            print(f"Wrote daily JSON to {json_path}")
         upload_dir(social_dir, market=market, run_date=today)
 
     # Returned for programmatic callers; never written to disk.

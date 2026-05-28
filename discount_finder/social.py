@@ -17,8 +17,11 @@ across slides and the bottom row is never clipped.
 
 from __future__ import annotations
 
+import json
 from datetime import date
 from pathlib import Path
+
+from .registry import _PLACEHOLDER_VALUES
 
 # ---- Canvas (9:16 — Instagram reels / stories) ----------------------------
 CANVAS_W, CANVAS_H = 1080, 1920
@@ -134,6 +137,60 @@ def _format_date(market: str, run_date: date) -> str:
 
 def _sort_fresh(fresh: list[dict]) -> list[dict]:
     return sorted(fresh, key=lambda e: (e["company"].lower(), e["code"].upper()))
+
+
+def _discount_field(entry: dict) -> str | None:
+    """Compact discount string for the daily JSON.
+
+    Prefers ``percentage`` (cleanest form, e.g. ``"12%"``); falls back to
+    the LLM's ``value`` (e.g. ``"€10 off"``, ``"free shipping"``) when
+    ``percentage`` is absent and ``value`` isn't a placeholder. Returns
+    None when neither applies, so the renderer can decide whether to
+    render a badge.
+    """
+    pct = (entry.get("percentage") or "").strip()
+    if pct:
+        return pct
+    raw_value = (entry.get("value") or "").strip()
+    if raw_value and raw_value.lower() not in _PLACEHOLDER_VALUES:
+        return raw_value
+    return None
+
+
+def write_daily_json(
+    fresh: list[dict],
+    out_dir: Path,
+    market: str,
+    run_date: date,
+) -> Path | None:
+    """Per-day codes dump: ``{market, date, discount_codes: [{company, code, discount}]}``.
+
+    Same alphabetical sort as the carousel so the JSON and the rendered
+    images list codes in the same order. Sits next to the PNGs and the
+    .txt list in ``out_dir`` — the bucket-side filename is
+    ``<market>_<YYYY-MM-DD>.json`` so it's self-identifying when
+    downloaded in isolation. Returns the path written, or None if there
+    are no codes.
+    """
+    if not fresh:
+        return None
+    payload = {
+        "market": market,
+        "date": run_date.isoformat(),
+        "discount_codes": [
+            {
+                "company": e["company"],
+                "code": e["code"],
+                "discount": _discount_field(e),
+            }
+            for e in _sort_fresh(fresh)
+        ],
+    }
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / f"{market}_{run_date.isoformat()}.json"
+    with path.open("w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2, ensure_ascii=False)
+    return path
 
 
 def write_text_list(fresh: list[dict], out_dir: Path) -> Path | None:
