@@ -31,7 +31,6 @@ GRADIENT_STOPS = [
 ]
 TITLE_COLOR    = (75, 0, 130)     # #4B0082 — deep purple
 DATE_COLOR     = (255, 79, 163)   # #ff4fa3 — hot pink
-SUBTITLE_COLOR = (154, 138, 166)  # #9a8aa6 — muted purple
 BADGE_BG       = (232, 226, 239)  # ≈ rgba(75,0,130,0.08) flattened over the bg
 BADGE_TEXT     = (75, 0, 130)
 SHOP_COLOR     = (58, 58, 58)     # #3a3a3a
@@ -48,17 +47,16 @@ HEADER_MB   = 36   # space below the header block
 FOOTER_MT   = 32   # space above the footer line
 
 # Reserved vertical room for header + footer, used by pagination math.
-# Matches the Angular component's ~215 / 80 estimates: title 58 + date 34 +
-# subtitle 30 with line-height + 6px gaps + margin-bottom, and a single
-# footer line with its margin-top.
-HEADER_BLOCK = 215
+# Header = title 58 + date 34, each with ~1.2 line-height, one 6px gap
+# between them, plus a 36px margin-bottom. Footer is one line + its
+# margin-top.
+HEADER_BLOCK = 160
 FOOTER_BLOCK = 80
 PAGINATION_SAFETY = 16   # small buffer so the last row never gets clipped
 
 # ---- Font sizing ----------------------------------------------------------
 TITLE_SIZE    = 58
 DATE_SIZE     = 34
-SUBTITLE_SIZE = 30
 BADGE_SIZE    = 30
 BODY_SIZE     = 36          # company + code use the same base size
 PCT_SIZE      = round(BODY_SIZE * 0.78)
@@ -199,7 +197,6 @@ def write_carousel_images(
 
     title_font    = load_font(_FONT_PATHS_BOLD, TITLE_SIZE)
     date_font     = load_font(_FONT_PATHS_BOLD, DATE_SIZE)
-    subtitle_font = load_font(_FONT_PATHS_BOLD, SUBTITLE_SIZE)
     badge_font    = load_font(_FONT_PATHS_BOLD, BADGE_SIZE)
     shop_font     = load_font(_FONT_PATHS_BOLD, BODY_SIZE)
     code_font     = load_font(_FONT_PATHS_BOLD, BODY_SIZE)
@@ -215,7 +212,6 @@ def write_carousel_images(
 
     title_text = _TITLES.get(market, _DEFAULT_TITLE)
     date_text = _format_date(market, run_date)
-    subtitle_text = "diski.nl"
     footer_text = _FOOTERS.get(market, _DEFAULT_FOOTER)
 
     for page_idx, page in enumerate(pages, start=1):
@@ -226,14 +222,10 @@ def write_carousel_images(
         x = SIDE_PAD
         y = TOP_PAD
         title_h = _text_height(draw, title_text, title_font)
-        date_h = _text_height(draw, date_text, date_font)
-        sub_h = _text_height(draw, subtitle_text, subtitle_font)
         gap = 6
         draw.text((x, y), title_text, font=title_font, fill=TITLE_COLOR)
         y += title_h + gap
         draw.text((x, y), date_text, font=date_font, fill=DATE_COLOR)
-        y += date_h + gap
-        draw.text((x, y), subtitle_text, font=subtitle_font, fill=SUBTITLE_COLOR)
 
         # Page badge pill (top-right), vertically aligned with the title.
         badge_text = f"{page_idx} / {total_pages}"
