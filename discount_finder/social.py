@@ -139,6 +139,25 @@ def _sort_fresh(fresh: list[dict]) -> list[dict]:
     return sorted(fresh, key=lambda e: (e["company"].lower(), e["code"].upper()))
 
 
+def _percentage_str(value) -> str:
+    """Normalize a percentage to a clean string like ``"12%"`` or ``""``.
+
+    The LLM sometimes returns the percentage as a bare int (``12``) rather
+    than a string (``"12%"``). Calling ``.strip()`` on the int crashes the
+    pipeline. Coerce: numbers get a trailing ``%`` appended, strings get
+    stripped, None/empty become ``""``.
+    """
+    if value is None:
+        return ""
+    s = str(value).strip()
+    if not s:
+        return ""
+    digits_only = s.replace(".", "", 1).replace(",", "", 1)
+    if digits_only.isdigit():
+        s += "%"
+    return s
+
+
 def _discount_field(entry: dict) -> str | None:
     """Compact discount string for the daily JSON.
 
@@ -148,7 +167,7 @@ def _discount_field(entry: dict) -> str | None:
     None when neither applies, so the renderer can decide whether to
     render a badge.
     """
-    pct = (entry.get("percentage") or "").strip()
+    pct = _percentage_str(entry.get("percentage"))
     if pct:
         return pct
     raw_value = (entry.get("value") or "").strip()
@@ -304,7 +323,7 @@ def write_carousel_images(
 
             company = entry["company"]
             code = (entry["code"] or "").strip()
-            percentage = (entry.get("percentage") or "").strip() if entry.get("percentage") else ""
+            percentage = _percentage_str(entry.get("percentage"))
 
             # Right-side: percentage hugs the right edge if present, then code.
             cursor_right = CANVAS_W - SIDE_PAD
