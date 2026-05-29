@@ -174,7 +174,13 @@ def run_actor_for_market(market: str) -> tuple[list[dict], str]:
         flush=True,
     )
     run = client.actor(APIFY_ACTOR).call(run_input=run_input)
-    dataset_id = run["defaultDatasetId"]
+    # apify-client 3.x returns a pydantic ActorRun model; older versions
+    # returned a dict. Support both so a future regression in either
+    # direction doesn't take the pipeline down again.
+    dataset_id = (
+        run.default_dataset_id if hasattr(run, "default_dataset_id")
+        else run["defaultDatasetId"]
+    )
     print(f"Apify run finished. Fetching dataset {dataset_id}…", flush=True)
     raw_items = list(client.dataset(dataset_id).iterate_items())
     return list(iter_posts(raw_items)), dataset_id
