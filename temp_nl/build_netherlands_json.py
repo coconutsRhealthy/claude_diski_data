@@ -32,7 +32,7 @@ Sorted alphabetically by ``company`` then ``code``.
 
 Usage:
 
-    python scripts/build_netherlands_json.py --folder temp_nl/5jun --date 2026-06-05
+    python temp_nl/build_netherlands_json.py --folder temp_nl/5jun --date 2026-06-05
 
 This is *only* the NL migration. Pulling germany / france / uk JSONs
 from R2 is a separate step — see ``temp_nl/README.md`` for that snippet.

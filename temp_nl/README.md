@@ -76,7 +76,7 @@ ISO date — nothing else changes.
 ### Step 1 — build the netherlands JSON
 
 ```
-.venv/bin/python scripts/build_netherlands_json.py \
+.venv/bin/python temp_nl/build_netherlands_json.py \
     --folder temp_nl/<dayfolder> \
     --date <YYYY-MM-DD>
 ```
@@ -84,7 +84,7 @@ ISO date — nothing else changes.
 Example:
 
 ```
-.venv/bin/python scripts/build_netherlands_json.py \
+.venv/bin/python temp_nl/build_netherlands_json.py \
     --folder temp_nl/5jun \
     --date 2026-06-05
 ```
