@@ -33,5 +33,10 @@ inputs/*/*
 !inputs/*/influencers.txt
 !inputs/*/handles_pool.txt
 
+# Netherlands side-channel — per-day handoff data is ephemeral and may
+# contain raw exports from another project. Track only the procedure doc.
+temp_nl/*
+!temp_nl/README.md
+
 # macOS
 .DS_Store
