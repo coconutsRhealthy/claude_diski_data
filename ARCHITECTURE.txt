@@ -10,6 +10,30 @@ Last updated: 2026-05-06 (post-OOM swap fix).
 
 
 -----------------------------------------------------------------------
+STATUS: CRON PAUSED 2026-06-09
+-----------------------------------------------------------------------
+
+The Mon/Wed/Fri cron that triggers the pipeline for france / germany / uk
+was paused on 2026-06-09 by commenting out the line in root's crontab
+(prefix ``# PAUSED 2026-06-09:``). The droplet, the image, the .env, the
+data on host volumes, and the R2 bucket are all untouched and intact —
+only the cron is suspended.
+
+Pre-pause crontab backup: ``/root/crontab.bak-20260609-165833`` on the droplet.
+
+To resume (single command):
+
+    ssh root@142.93.141.218 'crontab -l | sed "s/^# PAUSED 2026-06-09: //" | crontab -'
+
+Or interactively: ``crontab -e`` and delete the prefix.
+
+While paused: no new Apify spend, no new Anthropic spend, no new R2 objects,
+no frontend redeploys. ``handles.json`` / ``codes.json`` / ``handles_pool.txt``
+remain at their 2026-06-08 state. The temp_nl side-channel is *not* affected
+by this pause — that's manual and separate.
+
+
+-----------------------------------------------------------------------
 1. THE BIG PICTURE
 -----------------------------------------------------------------------
 
